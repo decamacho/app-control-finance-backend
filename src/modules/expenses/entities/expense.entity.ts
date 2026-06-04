@@ -8,21 +8,20 @@ export class Expense {
   id!: string;
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
-  amount!: number; // Monto del gasto
+  amount!: number;
 
   @Column({ type: 'date' })
-  date!: Date; // Fecha del gasto
+  date!: Date;
 
   @Column({ type: 'text', nullable: true })
   description!: string;
 
   @Column({ type: 'varchar', nullable: true })
-  receiptUrl!: string; // La URL de la foto en AWS S3
+  receiptUrl!: string;
 
   @Column({ type: 'varchar', default: 'manual' })
-  status!: string; // Ej: 'procesado_ia', 'manual'
+  status!: string;
 
-  // Relaciones: Un gasto pertenece a UNA billetera y a UNA categoría
   @ManyToOne(() => Wallet)
   wallet!: Wallet;
 
