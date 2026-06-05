@@ -1,11 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ExpensesModule } from './modules/expenses/expenses.module';
-
-import { Expense } from './modules/expenses/entities/expense.entity';
-import { Wallet } from './modules/wallets/entities/wallet.entity';
-import { Category } from './modules/categories/entitites/category.entity';
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -18,11 +14,11 @@ import { Category } from './modules/categories/entitites/category.entity';
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       autoLoadEntities: true,
-      entities: [Expense, Wallet, Category],
+      entities: [],
       synchronize: true,
       logging: true,
     }),
-    ExpensesModule,
+    UsersModule,
   ],
 })
 export class AppModule {}
