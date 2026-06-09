@@ -6,8 +6,11 @@ import {
   UpdateDateColumn,
   ManyToOne,
   JoinColumn,
+  OneToMany,
 } from 'typeorm';
 import { Role } from './role.entity';
+import { WalletUser } from '../../wallets/entities/wallet-user.entity';
+import { Category } from '../../categories/entities/category.entity';
 
 @Entity('users')
 export class User {
@@ -16,6 +19,12 @@ export class User {
 
   @Column({ type: 'varchar', length: 100 })
   nameUser!: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  firstNameUser!: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  lastNameUser!: string;
 
   @Column({ type: 'varchar', length: 150, unique: true })
   emailUser!: string;
@@ -45,12 +54,18 @@ export class User {
   lastLoginUser!: Date | null;
 
   @CreateDateColumn({ type: 'timestamp' })
-  createdUser!: Date;
+  createdAt!: Date;
 
   @UpdateDateColumn({ type: 'timestamp' })
-  modifyUser!: Date;
+  modifyAt!: Date;
 
   @ManyToOne(() => Role, (role) => role.users, { eager: true })
   @JoinColumn({ name: 'idRole' })
   role!: Role;
+
+  @OneToMany(() => WalletUser, (walletUser) => walletUser.users)
+  walletsUsers!: WalletUser[];
+
+  @OneToMany(() => Category, (category) => category.userOwner)
+  customCategories!: Category[];
 }
