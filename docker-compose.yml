@@ -7,10 +7,10 @@ services:
     restart: always
     environment:
       POSTGRES_USER: userDanielDevAdmin
-      POSTGRES_PASSWORD: DevFinanceAdmin2026*
+      POSTGRES_PASSWORD: DevFinanceAdmin2026
       POSTGRES_DB: app_control_finance_bd
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

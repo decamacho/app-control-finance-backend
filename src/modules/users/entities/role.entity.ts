@@ -1,4 +1,3 @@
-export class RoleEntity {}
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -14,10 +13,10 @@ export class Role {
   idRole!: string;
 
   @Column({ type: 'varchar', length: 50, unique: true })
-  nameRol!: string;
+  nameRole!: string;
 
   @Column({ type: 'boolean', default: true })
-  stateRol!: boolean;
+  stateRole!: boolean;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
