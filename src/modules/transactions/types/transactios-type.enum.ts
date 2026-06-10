@@ -1,0 +1,8 @@
+export enum ValidTransactionTypes {
+  INCOME = 'INCOME',
+  WITHDRAWAL = 'WITHDRAWAL',
+  CASH_ADVANCE = 'CASH ADVANCE',
+  LOAN = 'LOAN',
+  PAYMENT = 'PAYMENT',
+  TRANSFER = 'TRANSFER',
+}

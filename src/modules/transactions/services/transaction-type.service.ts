@@ -27,14 +27,9 @@ export class TypeTransactionService {
     createTypeTransactionDto: CreateTypeTransactionDto,
   ): Promise<TransactionType> {
     try {
-      const normalizedName = createTypeTransactionDto.typeTransaction
-        .toUpperCase()
-        .trim();
-
-      const newTypeTransaction = this.typeTransactionRepository.create({
-        ...createTypeTransactionDto,
-        typeTransaction: normalizedName,
-      });
+      const newTypeTransaction = this.typeTransactionRepository.create(
+        createTypeTransactionDto,
+      );
 
       return await this.typeTransactionRepository.save(newTypeTransaction);
     } catch (error: unknown) {
@@ -74,11 +69,6 @@ export class TypeTransactionService {
   ): Promise<TransactionType> {
     const typeTransaction =
       await this.findOneTypeTransaction(idTypeTransaction);
-
-    if (updateTypeTransactionDto.typeTransaction) {
-      updateTypeTransactionDto.typeTransaction =
-        updateTypeTransactionDto.typeTransaction.toUpperCase().trim();
-    }
 
     try {
       const updatedTypeTransaction = this.typeTransactionRepository.merge(

@@ -11,6 +11,7 @@ import {
 import { TRANSACTION_ROUTES } from '../types/transactions-routes.constant';
 import { TypeTransactionService } from '../services/transaction-type.service';
 import { CreateTypeTransactionDto } from '../dto/create-type-transaction.dto';
+import { UpdateTypeTransactionDto } from '../dto/update-type-transaction.dto';
 
 @Controller(TRANSACTION_ROUTES.TYPES)
 export class TypeTransactionsController {
@@ -40,7 +41,7 @@ export class TypeTransactionsController {
   @Patch(`:id`)
   updateTypeTransaction(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() updateTypeTransactionDto: CreateTypeTransactionDto,
+    @Body() updateTypeTransactionDto: UpdateTypeTransactionDto,
   ) {
     return this.typeTransactionService.updateTypeTransaction(
       id,
