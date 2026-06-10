@@ -36,7 +36,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       }
     } else {
       console.error('Unhandled Exception:', exception);
-      message = 'Ocurrió un error inesperado en el servidor';
+      message = 'An unexpected error occurred';
     }
 
     response.status(status).json({

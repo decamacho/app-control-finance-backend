@@ -43,7 +43,7 @@ export class ResponseInterceptor<T> implements NestInterceptor<
             ? dataObject.message
             : isEmptyArray
               ? 'No se encontraron registros disponibles'
-              : 'Operación realizada con exito';
+              : 'Operacion realizada con exito';
 
         return {
           success: true,

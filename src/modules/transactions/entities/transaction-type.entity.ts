@@ -1,13 +1,14 @@
 import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { Transaction } from './transaction.entity';
+import { ValidTransactionTypes } from '../types/transactios-type.enum';
 
 @Entity('typeTransaction')
 export class TransactionType {
   @PrimaryGeneratedColumn('uuid')
   idTypeTransaction!: string;
 
-  @Column({ type: 'varchar', length: 150, unique: true })
-  typeTransaction!: string;
+  @Column({ type: 'enum', enum: ValidTransactionTypes, unique: true })
+  typeTransaction!: ValidTransactionTypes;
 
   @Column({ type: 'boolean', default: true })
   stateTypeTransaction!: boolean;
