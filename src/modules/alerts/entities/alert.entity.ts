@@ -8,17 +8,34 @@ import {
 } from 'typeorm';
 import { User } from '../../users/entities/user.entity';
 import { Transaction } from '../../transactions/entities/transaction.entity';
+import type { TriggerConfig } from '../interfaces/alerts-type.interfaces';
+import { AlertType } from '../interfaces/alerts-type.interfaces';
 
 @Entity('alert')
 export class Alert {
   @PrimaryGeneratedColumn('uuid')
   idAlert!: string;
 
+  @Column({ type: 'varchar', length: 100 })
+  titleAlert!: string;
+
   @Column({ type: 'varchar', length: 255 })
   messageAlert!: string;
 
+  @Column({ type: 'enum', enum: AlertType })
+  typeAlert!: AlertType;
+
   @Column({ type: 'boolean', default: false })
   isRead!: boolean;
+
+  @Column({ type: 'boolean', default: true })
+  isActive!: boolean;
+
+  @Column({ type: 'date', nullable: true })
+  reminderDate!: Date | null;
+
+  @Column({ type: 'jsonb' })
+  triggerConfig!: TriggerConfig;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;

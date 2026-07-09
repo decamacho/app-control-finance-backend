@@ -9,12 +9,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { UpdateTypeTransactionDto } from '../dto/update-type-transaction.dto';
-
-interface PostgresError {
-  code: string;
-  detail?: string;
-  message: string;
-}
+import { PostgresError } from '../../../common/interfaces/postgres-error.interface';
 
 @Injectable()
 export class TypeTransactionService {
