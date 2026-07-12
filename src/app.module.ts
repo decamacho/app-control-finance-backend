@@ -9,6 +9,7 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { SplitsModule } from './modules/splits/splits.module';
 import { GoalsModule } from './modules/goals/goals.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { BudgetsModule } from './modules/budgets/budgets.module';
     SplitsModule,
     GoalsModule,
     BudgetsModule,
+    AuthModule,
   ],
 })
 export class AppModule {}
