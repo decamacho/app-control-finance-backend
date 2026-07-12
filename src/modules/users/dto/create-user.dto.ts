@@ -26,7 +26,7 @@ export class CreateUserDto {
   lastNameUser!: string;
 
   @IsNotEmpty()
-  @IsEmail()
+  @IsEmail({}, { message: 'The email must be a valid email address' })
   @Transform((params: { value: unknown }) =>
     typeof params.value === 'string'
       ? params.value.trim().toLowerCase()

@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+} from '@nestjs/common';
 import { SplitsService } from './splits.service';
 import { CreateSplitDto } from './dto/create-split.dto';
 import { UpdateSplitDto } from './dto/update-split.dto';
