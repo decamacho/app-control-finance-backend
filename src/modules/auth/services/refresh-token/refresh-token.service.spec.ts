@@ -1,16 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { JwtService } from '../jwt/jwt.service';
 import { SessionService } from '../session/session.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { User } from '../../../users/entities/user.entity';
-import { Session } from '../../entities/session.entity';
 import { RefreshPayload } from '../../interfaces/jwt-payload.interface';
 
 describe('RefreshTokenService', () => {
   let service: RefreshTokenService;
   let jwtService: jest.Mocked<JwtService>;
   let sessionService: jest.Mocked<SessionService>;
+  let userRepository: jest.Mocked<Repository<User>>;
 
   const mockUser: User = {
     idUser: 'user-uuid',
@@ -39,16 +41,11 @@ describe('RefreshTokenService', () => {
     customCategories: [],
   };
 
-  const mockSession: Session = {
+  const mockSession = {
     idSession: 'session-uuid',
     idUser: 'user-uuid',
-    deviceInfo: 'Chrome on Windows',
-    ipAddress: '192.168.1.1',
-    refreshToken: 'hashed-refresh-token',
-    createdAt: new Date(),
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     isActive: true,
-    user: undefined as unknown as User,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   };
 
   beforeEach(async () => {
@@ -64,6 +61,10 @@ describe('RefreshTokenService', () => {
       invalidateSession: jest.fn(),
     };
 
+    const mockUserRepository = {
+      findOne: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RefreshTokenService,
@@ -75,12 +76,17 @@ describe('RefreshTokenService', () => {
           provide: SessionService,
           useValue: mockSessionService,
         },
+        {
+          provide: getRepositoryToken(User),
+          useValue: mockUserRepository,
+        },
       ],
     }).compile();
 
     service = module.get<RefreshTokenService>(RefreshTokenService);
     jwtService = module.get(JwtService);
     sessionService = module.get(SessionService);
+    userRepository = module.get(getRepositoryToken(User));
   });
 
   it('should be defined', () => {
@@ -95,13 +101,14 @@ describe('RefreshTokenService', () => {
         type: 'refresh',
       };
       jwtService.verifyRefreshToken.mockReturnValue(mockPayload);
+      userRepository.findOne.mockResolvedValue(mockUser);
       sessionService.validateRefreshToken.mockResolvedValue(mockSession);
       jwtService.generateTokenPair.mockReturnValue({
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token',
       });
 
-      const result = await service.refresh('valid-refresh-token', mockUser);
+      const result = await service.refresh('valid-refresh-token');
 
       expect(result).toEqual({
         accessToken: 'new-access-token',
@@ -109,14 +116,15 @@ describe('RefreshTokenService', () => {
       });
     });
 
-    it('should throw UnauthorizedException when user id mismatch', async () => {
+    it('should throw UnauthorizedException when user not found', async () => {
       jwtService.verifyRefreshToken.mockReturnValue({
-        sub: 'different-user',
+        sub: 'non-existent-user',
         sessionId: 'session-uuid',
         type: 'refresh',
       });
+      userRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.refresh('token', mockUser)).rejects.toThrow(
+      await expect(service.refresh('token')).rejects.toThrow(
         UnauthorizedException,
       );
     });
@@ -127,13 +135,13 @@ describe('RefreshTokenService', () => {
         sessionId: 'session-uuid',
         type: 'refresh',
       });
-
+      userRepository.findOne.mockResolvedValue(mockUser);
       sessionService.validateRefreshToken.mockResolvedValue({
         ...mockSession,
         isActive: false,
       });
 
-      await expect(service.refresh('token', mockUser)).rejects.toThrow(
+      await expect(service.refresh('token')).rejects.toThrow(
         ForbiddenException,
       );
     });
@@ -146,7 +154,7 @@ describe('RefreshTokenService', () => {
         sessionId: 'session-uuid',
         type: 'refresh',
       });
-
+      userRepository.findOne.mockResolvedValue(mockUser);
       sessionService.validateRefreshToken.mockResolvedValue(mockSession);
       sessionService.generateSessionId.mockReturnValue('new-session-uuid');
       jwtService.generateTokenPair.mockReturnValue({

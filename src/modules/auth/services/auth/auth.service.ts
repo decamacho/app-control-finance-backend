@@ -1,7 +1,7 @@
 import {
   Injectable,
   UnauthorizedException,
-  InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,11 +11,25 @@ import { JwtService } from '../jwt/jwt.service';
 import { SessionService } from '../session/session.service';
 import { LoginDto } from '../../dto/login.dto';
 import { AUTH_ERRORS, STATE_USER } from '../../types/auth.constants';
+import { RefreshPayload } from '../../interfaces/jwt-payload.interface';
+
+export interface UserLoginResponse {
+  idUser: string;
+  nameUser: string;
+  firstNameUser: string;
+  lastNameUser: string;
+  emailUser: string;
+  phoneNumberUser: string | null;
+  role: {
+    idRole: string;
+    nameRole: string;
+  };
+}
 
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
-  user: Omit<User, 'passwordUser'>;
+  user: UserLoginResponse;
 }
 
 @Injectable()
@@ -75,13 +89,35 @@ export class AuthService {
     user.lastLoginUser = new Date();
     await this.userRepository.save(user);
 
-    const userCleaned = { ...user } as Partial<User>;
-    delete userCleaned.passwordUser;
-
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      user: userCleaned as Omit<User, 'passwordUser'>,
+      user: {
+        idUser: user.idUser,
+        nameUser: user.nameUser,
+        firstNameUser: user.firstNameUser,
+        lastNameUser: user.lastNameUser,
+        emailUser: user.emailUser,
+        phoneNumberUser: user.phoneNumberUser,
+        role: {
+          idRole: user.role.idRole,
+          nameRole: user.role.nameRole,
+        },
+      },
     };
+  }
+
+  async logout(refreshToken: string): Promise<void> {
+    const payload = this.jwtService.verifyRefreshToken(
+      refreshToken,
+    ) as RefreshPayload;
+
+    const session = await this.sessionService.findById(payload.sessionId);
+
+    if (!session) {
+      throw new NotFoundException(AUTH_ERRORS.SESSION_NOT_FOUND);
+    }
+
+    await this.sessionService.invalidateSession(payload.sessionId, payload.sub);
   }
 }

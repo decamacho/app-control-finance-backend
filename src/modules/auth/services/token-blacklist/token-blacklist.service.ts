@@ -1,38 +1,31 @@
 import { Injectable } from '@nestjs/common';
-
-interface BlacklistEntry {
-  token: string;
-  expiresAt: Date;
-}
+import * as crypto from 'crypto';
+import { RedisService } from '../../../redis/redis.service';
 
 @Injectable()
 export class TokenBlacklistService {
-  private readonly blacklist: Map<string, BlacklistEntry> = new Map();
+  constructor(private readonly redisService: RedisService) {}
 
-  add(token: string, expiresIn: number = 86400): void {
-    const expiresAt = new Date(Date.now() + expiresIn * 1000);
-    this.blacklist.set(token, { token, expiresAt });
+  private blacklistKey(token: string): string {
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    return `blacklist:${hash}`;
   }
 
-  has(token: string): boolean {
-    const entry = this.blacklist.get(token);
-    if (!entry) {
-      return false;
-    }
-
-    if (new Date() > entry.expiresAt) {
-      this.blacklist.delete(token);
-      return false;
-    }
-
-    return true;
+  async add(token: string, expiresIn: number = 86400): Promise<void> {
+    await this.redisService.set(this.blacklistKey(token), '1', expiresIn);
   }
 
-  cleanup(): void {
-    const now = new Date();
-    for (const [token, entry] of this.blacklist.entries()) {
-      if (now > entry.expiresAt) {
-        this.blacklist.delete(token);
+  async has(token: string): Promise<boolean> {
+    return this.redisService.exists(this.blacklistKey(token));
+  }
+
+  async cleanup(): Promise<void> {
+    const keys = await this.redisService.getClient().keys('blacklist:*');
+
+    for (const key of keys) {
+      const ttl = await this.redisService.getClient().ttl(key);
+      if (ttl <= 0) {
+        await this.redisService.del(key);
       }
     }
   }

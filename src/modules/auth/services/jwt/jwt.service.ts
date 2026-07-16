@@ -1,4 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService as NestJwtService } from '@nestjs/jwt';
 import { JWT_CONSTANTS, AUTH_ERRORS } from '../../types/auth.constants';
 import {
@@ -8,18 +9,25 @@ import {
 
 @Injectable()
 export class JwtService {
-  constructor(private readonly jwtService: NestJwtService) {}
+  private readonly secret: string;
+
+  constructor(
+    private readonly jwtService: NestJwtService,
+    configService: ConfigService,
+  ) {
+    this.secret = configService.get<string>('JWT_SECRET')!;
+  }
 
   generateAccessToken(payload: JwtPayload): string {
     return this.jwtService.sign(payload, {
-      secret: JWT_CONSTANTS.SECRET,
+      secret: this.secret,
       expiresIn: JWT_CONSTANTS.ACCESS_EXPIRES_IN,
     });
   }
 
   generateRefreshToken(payload: RefreshPayload): string {
     return this.jwtService.sign(payload, {
-      secret: JWT_CONSTANTS.SECRET,
+      secret: this.secret,
       expiresIn: JWT_CONSTANTS.REFRESH_EXPIRES_IN,
     });
   }
@@ -52,7 +60,7 @@ export class JwtService {
   verifyAccessToken(token: string): JwtPayload {
     try {
       return this.jwtService.verify<JwtPayload>(token, {
-        secret: JWT_CONSTANTS.SECRET,
+        secret: this.secret,
       });
     } catch (error: unknown) {
       const err = error as { name: string };
@@ -66,7 +74,7 @@ export class JwtService {
   verifyRefreshToken(token: string): RefreshPayload {
     try {
       return this.jwtService.verify<RefreshPayload>(token, {
-        secret: JWT_CONSTANTS.SECRET,
+        secret: this.secret,
       });
     } catch (error: unknown) {
       const err = error as { name: string };

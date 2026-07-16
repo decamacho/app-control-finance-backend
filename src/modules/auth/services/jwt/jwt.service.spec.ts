@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { UnauthorizedException } from '@nestjs/common';
 import { JwtService as NestJwtService } from '@nestjs/jwt';
 import { JwtService } from './jwt.service';
@@ -36,6 +37,10 @@ describe('JwtService', () => {
         {
           provide: NestJwtService,
           useValue: mockNestJwtService,
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue('test-secret') },
         },
       ],
     }).compile();

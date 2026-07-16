@@ -10,6 +10,7 @@ import { SplitsModule } from './modules/splits/splits.module';
 import { GoalsModule } from './modules/goals/goals.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { RedisModule } from './modules/redis/redis.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { AuthModule } from './modules/auth/auth.module';
     GoalsModule,
     BudgetsModule,
     AuthModule,
+    RedisModule,
   ],
 })
 export class AppModule {}

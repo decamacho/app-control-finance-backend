@@ -1,10 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from '../../../users/entities/user.entity';
+import { RedisService } from '../../../redis/redis.service';
 import { SessionService } from './session.service';
-import { Session } from '../../entities/session.entity';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn().mockResolvedValue('hashed-refresh-token'),
@@ -15,41 +12,47 @@ import * as bcrypt from 'bcrypt';
 
 describe('SessionService', () => {
   let service: SessionService;
-  let sessionRepository: jest.Mocked<Repository<Session>>;
+  let redisService: jest.Mocked<RedisService>;
 
-  const mockSession: Session = {
+  const mockRedis = {
+    hset: jest.fn().mockResolvedValue(undefined),
+    hgetall: jest.fn(),
+    hget: jest.fn().mockResolvedValue(null),
+    expire: jest.fn().mockResolvedValue(undefined),
+    sadd: jest.fn().mockResolvedValue(undefined),
+    srem: jest.fn().mockResolvedValue(undefined),
+    smembers: jest.fn(),
+    del: jest.fn().mockResolvedValue(undefined),
+    getClient: jest.fn().mockReturnValue({
+      keys: jest.fn().mockResolvedValue([]),
+      ttl: jest.fn().mockResolvedValue(-1),
+    }),
+  };
+
+  const mockSessionData = {
     idSession: 'session-uuid',
     idUser: 'user-uuid',
     deviceInfo: 'Chrome on Windows',
     ipAddress: '192.168.1.1',
-    refreshToken: 'hashed-refresh-token',
-    createdAt: new Date(),
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    isActive: true,
-    user: undefined as unknown as User,
+    refreshTokenHash: 'hashed-refresh-token',
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+    isActive: 'true',
   };
 
   beforeEach(async () => {
-    const mockRepository = {
-      create: jest.fn(),
-      save: jest.fn(),
-      findOne: jest.fn(),
-      find: jest.fn(),
-      update: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SessionService,
         {
-          provide: getRepositoryToken(Session),
-          useValue: mockRepository,
+          provide: RedisService,
+          useValue: mockRedis,
         },
       ],
     }).compile();
 
     service = module.get<SessionService>(SessionService);
-    sessionRepository = module.get(getRepositoryToken(Session));
+    redisService = module.get(RedisService);
   });
 
   it('should be defined', () => {
@@ -57,42 +60,34 @@ describe('SessionService', () => {
   });
 
   describe('create', () => {
-    it('should create a new session', async () => {
+    it('should create a new session in Redis', async () => {
       const params = {
         idUser: 'user-uuid',
         deviceInfo: 'Chrome on Windows',
         ipAddress: '192.168.1.1',
       };
 
-      sessionRepository.create.mockReturnValue(mockSession);
-      sessionRepository.save.mockResolvedValue(mockSession);
-
       const result = await service.create(params, 'refresh-token-value');
 
-      expect(result).toEqual(mockSession);
-      expect(sessionRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          idUser: 'user-uuid',
-          deviceInfo: 'Chrome on Windows',
-          ipAddress: '192.168.1.1',
-          isActive: true,
-        }),
-      );
-      expect(sessionRepository.save).toHaveBeenCalled();
+      expect(result.idSession).toBeDefined();
+      expect(redisService.hset).toHaveBeenCalled();
+      expect(redisService.expire).toHaveBeenCalled();
+      expect(redisService.sadd).toHaveBeenCalled();
     });
   });
 
   describe('findById', () => {
-    it('should return a session by id', async () => {
-      sessionRepository.findOne.mockResolvedValue(mockSession);
+    it('should return session data when found', async () => {
+      mockRedis.hgetall.mockResolvedValue(mockSessionData);
 
       const result = await service.findById('session-uuid');
 
-      expect(result).toEqual(mockSession);
+      expect(result).toBeDefined();
+      expect(result?.idUser).toBe('user-uuid');
     });
 
     it('should return null when session not found', async () => {
-      sessionRepository.findOne.mockResolvedValue(null);
+      mockRedis.hgetall.mockResolvedValue({});
 
       const result = await service.findById('non-existent');
 
@@ -102,22 +97,19 @@ describe('SessionService', () => {
 
   describe('findByUserId', () => {
     it('should return active sessions for user', async () => {
-      sessionRepository.find.mockResolvedValue([mockSession]);
+      mockRedis.smembers.mockResolvedValue(['session-uuid']);
+      mockRedis.hgetall.mockResolvedValue(mockSessionData);
 
       const result = await service.findByUserId('user-uuid');
 
       expect(result).toHaveLength(1);
-      expect(sessionRepository.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { idUser: 'user-uuid', isActive: true },
-        }),
-      );
+      expect(result[0].idSession).toBe('session-uuid');
     });
   });
 
   describe('validateRefreshToken', () => {
-    it('should return session for valid refresh token', async () => {
-      sessionRepository.findOne.mockResolvedValue(mockSession);
+    it('should return session data for valid refresh token', async () => {
+      mockRedis.hgetall.mockResolvedValue(mockSessionData);
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(true as never);
 
       const result = await service.validateRefreshToken(
@@ -125,11 +117,11 @@ describe('SessionService', () => {
         'valid-refresh-token',
       );
 
-      expect(result).toEqual(mockSession);
+      expect(result.isActive).toBe(true);
     });
 
     it('should throw NotFoundException when session not found', async () => {
-      sessionRepository.findOne.mockResolvedValue(null);
+      mockRedis.hgetall.mockResolvedValue({});
 
       await expect(
         service.validateRefreshToken('non-existent', 'token'),
@@ -138,10 +130,10 @@ describe('SessionService', () => {
 
     it('should throw ForbiddenException when session expired', async () => {
       const expiredSession = {
-        ...mockSession,
-        expiresAt: new Date(Date.now() - 1000),
+        ...mockSessionData,
+        expiresAt: new Date(Date.now() - 1000).toISOString(),
       };
-      sessionRepository.findOne.mockResolvedValue(expiredSession);
+      mockRedis.hgetall.mockResolvedValue(expiredSession);
 
       await expect(
         service.validateRefreshToken('session-uuid', 'token'),
@@ -149,7 +141,7 @@ describe('SessionService', () => {
     });
 
     it('should throw ForbiddenException for invalid refresh token', async () => {
-      sessionRepository.findOne.mockResolvedValue(mockSession);
+      mockRedis.hgetall.mockResolvedValue(mockSessionData);
       jest.spyOn(bcrypt, 'compare').mockResolvedValue(false as never);
 
       await expect(
@@ -160,21 +152,16 @@ describe('SessionService', () => {
 
   describe('invalidateSession', () => {
     it('should mark session as inactive', async () => {
-      sessionRepository.findOne.mockResolvedValue(mockSession);
-      sessionRepository.save.mockResolvedValue({
-        ...mockSession,
-        isActive: false,
-      });
+      mockRedis.hgetall.mockResolvedValue(mockSessionData);
 
       await service.invalidateSession('session-uuid', 'user-uuid');
 
-      expect(sessionRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ isActive: false }),
-      );
+      expect(redisService.hset).toHaveBeenCalled();
+      expect(redisService.srem).toHaveBeenCalled();
     });
 
     it('should throw NotFoundException when session not found', async () => {
-      sessionRepository.findOne.mockResolvedValue(null);
+      mockRedis.hgetall.mockResolvedValue({});
 
       await expect(
         service.invalidateSession('non-existent', 'user-uuid'),
@@ -184,32 +171,30 @@ describe('SessionService', () => {
 
   describe('invalidateAllUserSessions', () => {
     it('should mark all user sessions as inactive', async () => {
-      sessionRepository.update.mockResolvedValue({
-        affected: 2,
-        raw: [],
-        generatedMaps: [],
-      });
+      mockRedis.smembers.mockResolvedValue(['session-uuid', 'session-uuid-2']);
+      mockRedis.hgetall.mockResolvedValue(mockSessionData);
+
+      mockRedis.hset.mockClear();
 
       await service.invalidateAllUserSessions('user-uuid');
 
-      expect(sessionRepository.update).toHaveBeenCalledWith(
-        { idUser: 'user-uuid', isActive: true },
-        { isActive: false },
-      );
+      expect(redisService.hset).toHaveBeenCalledTimes(2);
+      expect(redisService.del).toHaveBeenCalledTimes(1);
     });
   });
 
   describe('cleanupExpiredSessions', () => {
-    it('should mark expired sessions as inactive', async () => {
-      sessionRepository.update.mockResolvedValue({
-        affected: 1,
-        raw: [],
-        generatedMaps: [],
-      });
+    it('should clean up expired sessions', async () => {
+      const mockClient = {
+        keys: jest.fn().mockResolvedValue(['session:uuid-1']),
+        ttl: jest.fn().mockResolvedValue(-2),
+      };
+      mockRedis.getClient.mockReturnValue(mockClient as never);
+      mockRedis.hget.mockResolvedValue('user-uuid');
 
       await service.cleanupExpiredSessions();
 
-      expect(sessionRepository.update).toHaveBeenCalled();
+      expect(redisService.del).toHaveBeenCalled();
     });
   });
 
