@@ -9,7 +9,6 @@ import { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { TokenBlacklistService } from '../services/token-blacklist/token-blacklist.service';
 import {
   AUTH_ERRORS,
-  JWT_CONSTANTS,
   STATE_USER,
 } from '../types/auth.constants';
 
@@ -24,7 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       passReqToCallback: true,
-      secretOrKey: JWT_CONSTANTS.SECRET,
+      secretOrKey: process.env.JWT_SECRET!,
     });
   }
 
@@ -37,7 +36,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       ? authHeader.substring(7)
       : null;
 
-    if (token && this.tokenBlacklistService.has(token)) {
+    if (token && (await this.tokenBlacklistService.has(token))) {
       throw new UnauthorizedException(AUTH_ERRORS.TOKEN_INVALID);
     }
 

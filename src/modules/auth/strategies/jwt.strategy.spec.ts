@@ -8,6 +8,27 @@ import { User } from '../../users/entities/user.entity';
 import { Role } from '../../users/entities/role.entity';
 import { TokenBlacklistService } from '../services/token-blacklist/token-blacklist.service';
 
+jest.mock('../types/auth.constants', () => ({
+  JWT_CONSTANTS: {
+    SECRET: 'test-secret-key',
+    ACCESS_EXPIRES_IN: '15m',
+    REFRESH_EXPIRES_IN: '7d',
+    REFRESH_TOKEN_PREFIX: 'refresh_',
+  },
+  AUTH_ERRORS: {
+    TOKEN_EXPIRED: 'Token has expired',
+    TOKEN_INVALID: 'Invalid token',
+    REFRESH_TOKEN_INVALID: 'Invalid or expired refresh token',
+    SESSION_NOT_FOUND: 'Session not found',
+    SESSION_EXPIRED: 'Session has expired',
+    SESSION_NO_FOUND_ACTIVE: 'User not found or inactive',
+  },
+  STATE_USER: {
+    ACTIVE: 'ACTIVE',
+    INACTIVE: 'INACTIVE',
+  },
+}));
+
 describe('JwtStrategy', () => {
   let strategy: JwtStrategy;
   let userRepository: jest.Mocked<Repository<User>>;
@@ -49,6 +70,8 @@ describe('JwtStrategy', () => {
   } as Request;
 
   beforeEach(async () => {
+    process.env.JWT_SECRET = 'test-secret-key';
+
     const mockRepository = {
       findOne: jest.fn(),
     };
@@ -84,7 +107,7 @@ describe('JwtStrategy', () => {
 
   describe('validate', () => {
     it('should return user without password for valid active user', async () => {
-      tokenBlacklistService.has.mockReturnValue(false);
+      tokenBlacklistService.has.mockResolvedValue(false);
       userRepository.findOne.mockResolvedValue(mockUser);
 
       const result = await strategy.validate(mockRequest, {
@@ -101,7 +124,7 @@ describe('JwtStrategy', () => {
     });
 
     it('should throw UnauthorizedException when token is blacklisted', async () => {
-      tokenBlacklistService.has.mockReturnValue(true);
+      tokenBlacklistService.has.mockResolvedValue(true);
 
       await expect(
         strategy.validate(mockRequest, {
@@ -114,7 +137,7 @@ describe('JwtStrategy', () => {
     });
 
     it('should throw UnauthorizedException when user not found', async () => {
-      tokenBlacklistService.has.mockReturnValue(false);
+      tokenBlacklistService.has.mockResolvedValue(false);
       userRepository.findOne.mockResolvedValue(null);
 
       await expect(
@@ -128,7 +151,7 @@ describe('JwtStrategy', () => {
     });
 
     it('should throw UnauthorizedException when user is inactive', async () => {
-      tokenBlacklistService.has.mockReturnValue(false);
+      tokenBlacklistService.has.mockResolvedValue(false);
       userRepository.findOne.mockResolvedValue({
         ...mockUser,
         statusUser: 'INACTIVE',

@@ -1,6 +1,4 @@
 export const JWT_CONSTANTS = {
-  SECRET:
-    process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
   ACCESS_EXPIRES_IN: '15m',
   REFRESH_EXPIRES_IN: '7d',
   REFRESH_TOKEN_PREFIX: 'refresh_',

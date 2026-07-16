@@ -6,7 +6,6 @@ import { JwtService } from '../jwt/jwt.service';
 import { SessionService } from '../session/session.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { User } from '../../../users/entities/user.entity';
-import { Session } from '../../entities/session.entity';
 import { RefreshPayload } from '../../interfaces/jwt-payload.interface';
 
 describe('RefreshTokenService', () => {
@@ -42,16 +41,11 @@ describe('RefreshTokenService', () => {
     customCategories: [],
   };
 
-  const mockSession: Session = {
+  const mockSession = {
     idSession: 'session-uuid',
     idUser: 'user-uuid',
-    deviceInfo: 'Chrome on Windows',
-    ipAddress: '192.168.1.1',
-    refreshToken: 'hashed-refresh-token',
-    createdAt: new Date(),
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     isActive: true,
-    user: undefined as unknown as User,
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   };
 
   beforeEach(async () => {
