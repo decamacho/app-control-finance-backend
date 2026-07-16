@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  InternalServerErrorException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -12,10 +8,23 @@ import { SessionService } from '../session/session.service';
 import { LoginDto } from '../../dto/login.dto';
 import { AUTH_ERRORS, STATE_USER } from '../../types/auth.constants';
 
+export interface UserLoginResponse {
+  idUser: string;
+  nameUser: string;
+  firstNameUser: string;
+  lastNameUser: string;
+  emailUser: string;
+  phoneNumberUser: string | null;
+  role: {
+    idRole: string;
+    nameRole: string;
+  };
+}
+
 export interface LoginResponse {
   accessToken: string;
   refreshToken: string;
-  user: Omit<User, 'passwordUser'>;
+  user: UserLoginResponse;
 }
 
 @Injectable()
@@ -75,13 +84,21 @@ export class AuthService {
     user.lastLoginUser = new Date();
     await this.userRepository.save(user);
 
-    const userCleaned = { ...user } as Partial<User>;
-    delete userCleaned.passwordUser;
-
     return {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      user: userCleaned as Omit<User, 'passwordUser'>,
+      user: {
+        idUser: user.idUser,
+        nameUser: user.nameUser,
+        firstNameUser: user.firstNameUser,
+        lastNameUser: user.lastNameUser,
+        emailUser: user.emailUser,
+        phoneNumberUser: user.phoneNumberUser,
+        role: {
+          idRole: user.role.idRole,
+          nameRole: user.role.nameRole,
+        },
+      },
     };
   }
 }

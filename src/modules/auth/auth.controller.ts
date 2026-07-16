@@ -7,9 +7,11 @@ import {
   Body,
   UseGuards,
   Req,
+  Res,
   ParseUUIDPipe,
+  UnauthorizedException,
 } from '@nestjs/common';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { JwtService } from './services/jwt/jwt.service';
 import { AuthService } from './services/auth/auth.service';
@@ -17,7 +19,6 @@ import { RefreshTokenService } from './services/refresh-token/refresh-token.serv
 import { SessionService } from './services/session/session.service';
 import { TokenBlacklistService } from './services/token-blacklist/token-blacklist.service';
 import { LoginDto } from './dto/login.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { User } from '../users/entities/user.entity';
 
@@ -41,23 +42,48 @@ export class AuthController {
   async login(
     @Body() loginDto: LoginDto,
     @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
   ) {
-    const deviceInfo = (req.headers['user-agent'] || 'unknown').substring(0, 255);
-    const ipAddress = (req.ip || req.socket?.remoteAddress || 'unknown').substring(0, 45);
+    const deviceInfo = (req.headers['user-agent'] || 'unknown').substring(
+      0,
+      255,
+    );
+    const ipAddress = (
+      req.ip ||
+      req.socket?.remoteAddress ||
+      'unknown'
+    ).substring(0, 45);
 
-    return this.authService.login(loginDto, deviceInfo, ipAddress);
+    const result = await this.authService.login(
+      loginDto,
+      deviceInfo,
+      ipAddress,
+    );
+
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/auth/refresh',
+    });
+
+    return {
+      accessToken: result.accessToken,
+      user: result.user,
+    };
   }
 
+  @Public()
   @Post('refresh')
-  async refresh(
-    @Body() refreshTokenDto: RefreshTokenDto,
-    @Req() req: AuthenticatedRequest,
-  ) {
-    const tokens = await this.refreshTokenService.refresh(
-      refreshTokenDto.refreshToken,
-      req.user,
-    );
-    return tokens;
+  async refresh(@Req() req: Request) {
+    const refreshToken = req.cookies?.refreshToken as string | undefined;
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token not found');
+    }
+
+    return this.refreshTokenService.refresh(refreshToken);
   }
 
   @Get('sessions')
