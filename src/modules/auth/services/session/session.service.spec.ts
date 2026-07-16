@@ -189,7 +189,7 @@ describe('SessionService', () => {
         keys: jest.fn().mockResolvedValue(['session:uuid-1']),
         ttl: jest.fn().mockResolvedValue(-2),
       };
-      mockRedis.getClient.mockReturnValue(mockClient as never);
+      mockRedis.getClient.mockReturnValue(mockClient);
       mockRedis.hget.mockResolvedValue('user-uuid');
 
       await service.cleanupExpiredSessions();

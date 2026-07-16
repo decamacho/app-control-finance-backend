@@ -95,13 +95,10 @@ describe('TokenBlacklistService', () => {
       const mockClient = {
         keys: jest
           .fn()
-          .mockResolvedValue([
-            'blacklist:valid',
-            'blacklist:expired',
-          ]),
+          .mockResolvedValue(['blacklist:valid', 'blacklist:expired']),
         ttl: jest.fn().mockResolvedValueOnce(3000).mockResolvedValueOnce(-2),
       };
-      mockRedis.getClient.mockReturnValue(mockClient as never);
+      mockRedis.getClient.mockReturnValue(mockClient);
 
       await service.cleanup();
 

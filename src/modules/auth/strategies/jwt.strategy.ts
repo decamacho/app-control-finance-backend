@@ -7,10 +7,7 @@ import type { Request } from 'express';
 import { User } from '../../users/entities/user.entity';
 import { JwtPayload } from '../interfaces/jwt-payload.interface';
 import { TokenBlacklistService } from '../services/token-blacklist/token-blacklist.service';
-import {
-  AUTH_ERRORS,
-  STATE_USER,
-} from '../types/auth.constants';
+import { AUTH_ERRORS, STATE_USER } from '../types/auth.constants';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
