@@ -7,13 +7,16 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { TRANSACTION_ROUTES } from '../types/transactions-routes.constant';
 import { TypeTransactionService } from '../services/transaction-type.service';
 import { CreateTypeTransactionDto } from '../dto/create-type-transaction.dto';
 import { UpdateTypeTransactionDto } from '../dto/update-type-transaction.dto';
 
 @Controller(TRANSACTION_ROUTES.TYPES)
+@UseGuards(JwtAuthGuard)
 export class TypeTransactionsController {
   constructor(
     private readonly typeTransactionService: TypeTransactionService,

@@ -2,16 +2,20 @@ import {
   Injectable,
   UnauthorizedException,
   NotFoundException,
+  ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from '../../../users/entities/user.entity';
+import { Role } from '../../../users/entities/role.entity';
 import { JwtService } from '../jwt/jwt.service';
 import { SessionService } from '../session/session.service';
-import { LoginDto } from '../../dto/login.dto';
+import { EmailVerificationService } from '../email-verification/email-verification.service';
+import { LoginAuthDto } from '../../dto/login-auth.dto';
+import { RegisterAuthDto } from '../../dto/register-auth.dto';
 import { AUTH_ERRORS, STATE_USER } from '../../types/auth.constants';
-import { RefreshPayload } from '../../interfaces/jwt-payload.interface';
 
 export interface UserLoginResponse {
   idUser: string;
@@ -32,27 +36,47 @@ export interface LoginResponse {
   user: UserLoginResponse;
 }
 
+export interface RegisterResponse {
+  idUser: string;
+  emailUser: string;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @InjectRepository(Role)
+    private readonly roleRepository: Repository<Role>,
     private readonly jwtService: JwtService,
     private readonly sessionService: SessionService,
+    private readonly emailVerificationService: EmailVerificationService,
   ) {}
 
   async login(
-    loginDto: LoginDto,
+    loginDto: LoginAuthDto,
     deviceInfo: string,
     ipAddress: string,
   ): Promise<LoginResponse> {
     const user = await this.userRepository.findOne({
-      where: { emailUser: loginDto.email },
+      where: { emailUser: loginDto.emailUser },
       relations: { role: true },
     });
 
-    if (!user || user.statusUser !== STATE_USER.ACTIVE) {
+    if (!user) {
       throw new UnauthorizedException(AUTH_ERRORS.SESSION_NO_FOUND_ACTIVE);
+    }
+
+    if (user.statusUser === STATE_USER.BLOCKED) {
+      throw new UnauthorizedException(AUTH_ERRORS.USER_BLOCKED);
+    }
+
+    if (user.statusUser === STATE_USER.INACTIVE) {
+      throw new UnauthorizedException(AUTH_ERRORS.SESSION_NO_FOUND_ACTIVE);
+    }
+
+    if (user.statusUser === STATE_USER.PENDING_VERIFY) {
+      throw new UnauthorizedException(AUTH_ERRORS.PENDING_VERIFY);
     }
 
     if (!user.passwordUser) {
@@ -60,7 +84,7 @@ export class AuthService {
     }
 
     const isPasswordValid = await bcrypt.compare(
-      loginDto.password,
+      loginDto.passwordUser,
       user.passwordUser,
     );
 
@@ -107,10 +131,120 @@ export class AuthService {
     };
   }
 
+  async register(registerDto: RegisterAuthDto): Promise<RegisterResponse> {
+    const existingUser = await this.userRepository.findOne({
+      where: { emailUser: registerDto.emailUser },
+    });
+
+    if (existingUser) {
+      throw new ConflictException(AUTH_ERRORS.EMAIL_ALREADY_EXISTS);
+    }
+
+    const defaultRole = await this.roleRepository.findOne({
+      where: { nameRole: 'USER' },
+    });
+
+    if (!defaultRole) {
+      throw new NotFoundException(AUTH_ERRORS.DEFAULT_ROLE_NOT_FOUND);
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(registerDto.passwordUser, salt);
+
+    const newUser = this.userRepository.create({
+      nameUser: registerDto.nameUser,
+      firstNameUser: registerDto.nameUser,
+      lastNameUser: registerDto.nameUser,
+      emailUser: registerDto.emailUser,
+      passwordUser: hashedPassword,
+      statusUser: STATE_USER.PENDING_VERIFY,
+      isVerifyUser: false,
+      role: defaultRole,
+    });
+
+    const savedUser = await this.userRepository.save(newUser);
+
+    await this.emailVerificationService.generateAndSendToken(
+      savedUser.idUser,
+      savedUser.emailUser,
+    );
+
+    return {
+      idUser: savedUser.idUser,
+      emailUser: savedUser.emailUser,
+    };
+  }
+
+  async verifyEmail(token: string): Promise<{ emailUser: string }> {
+    const user = await this.emailVerificationService.verifyEmail(token);
+
+    return { emailUser: user.emailUser };
+  }
+
+  async resendVerification(emailUser: string): Promise<{ emailUser: string }> {
+    const user = await this.userRepository.findOne({
+      where: { emailUser },
+    });
+
+    if (!user) {
+      throw new NotFoundException(AUTH_ERRORS.USER_NOT_FOUND);
+    }
+
+    if (user.isVerifyUser) {
+      throw new BadRequestException(AUTH_ERRORS.VERIFICATION_ALREADY_DONE);
+    }
+
+    await this.emailVerificationService.generateAndSendToken(
+      user.idUser,
+      user.emailUser,
+    );
+
+    return { emailUser: user.emailUser };
+  }
+
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ emailUser: string }> {
+    const user = await this.userRepository.findOne({
+      where: { idUser: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(AUTH_ERRORS.USER_NOT_FOUND);
+    }
+
+    if (!user.passwordUser) {
+      throw new BadRequestException(AUTH_ERRORS.TOKEN_INVALID);
+    }
+
+    const isCurrentPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.passwordUser,
+    );
+
+    if (!isCurrentPasswordValid) {
+      throw new UnauthorizedException(AUTH_ERRORS.CURRENT_PASSWORD_INCORRECT);
+    }
+
+    const isSamePassword = await bcrypt.compare(newPassword, user.passwordUser);
+
+    if (isSamePassword) {
+      throw new BadRequestException(AUTH_ERRORS.SAME_PASSWORD);
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.passwordUser = await bcrypt.hash(newPassword, salt);
+    await this.userRepository.save(user);
+
+    return {
+      emailUser: user.emailUser,
+    };
+  }
+
   async logout(refreshToken: string): Promise<void> {
-    const payload = this.jwtService.verifyRefreshToken(
-      refreshToken,
-    ) as RefreshPayload;
+    const payload = this.jwtService.verifyRefreshToken(refreshToken);
 
     const session = await this.sessionService.findById(payload.sessionId);
 

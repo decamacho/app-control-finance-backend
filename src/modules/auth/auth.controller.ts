@@ -10,7 +10,9 @@ import {
   Res,
   ParseUUIDPipe,
   UnauthorizedException,
+  HttpCode,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './services/auth/auth.service';
@@ -18,7 +20,10 @@ import { JwtService } from './services/jwt/jwt.service';
 import { RefreshTokenService } from './services/refresh-token/refresh-token.service';
 import { SessionService } from './services/session/session.service';
 import { TokenBlacklistService } from './services/token-blacklist/token-blacklist.service';
-import { LoginDto } from './dto/login.dto';
+import { LoginAuthDto } from './dto/login-auth.dto';
+import { RegisterAuthDto } from './dto/register-auth.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { ResendVerifyDto } from './dto/resend-verify.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { User } from '../users/entities/user.entity';
 
@@ -38,9 +43,22 @@ export class AuthController {
   ) {}
 
   @Public()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @Post('register')
+  async register(@Body() registerAuthDto: RegisterAuthDto) {
+    const result = await this.authService.register(registerAuthDto);
+    return {
+      data: result,
+      message:
+        'User registered successfully. Please check your email to verify your account.',
+    };
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @Post('login')
   async login(
-    @Body() loginDto: LoginDto,
+    @Body() loginAuthDto: LoginAuthDto,
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
@@ -55,7 +73,7 @@ export class AuthController {
     ).substring(0, 45);
 
     const result = await this.authService.login(
-      loginDto,
+      loginAuthDto,
       deviceInfo,
       ipAddress,
     );
@@ -86,6 +104,45 @@ export class AuthController {
     return this.refreshTokenService.refresh(refreshToken);
   }
 
+  @Public()
+  @Get('verify-email/:token')
+  async verifyEmail(@Param('token') token: string) {
+    const result = await this.authService.verifyEmail(token);
+    return {
+      data: result,
+      message: `Email ${result.emailUser} verified successfully`,
+    };
+  }
+
+  @Public()
+  @Post('resend-verify')
+  @HttpCode(200)
+  async resendVerify(@Body() resendVerifyDto: ResendVerifyDto) {
+    const result = await this.authService.resendVerification(
+      resendVerifyDto.emailUser,
+    );
+    return {
+      data: result,
+      message: 'Verification email sent successfully',
+    };
+  }
+
+  @Post('change-password')
+  async changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const result = await this.authService.changePassword(
+      req.user.idUser,
+      changePasswordDto.currentPassword,
+      changePasswordDto.newPassword,
+    );
+    return {
+      data: result,
+      message: 'Password changed successfully',
+    };
+  }
+
   @Get('sessions')
   async getSessions(@Req() req: AuthenticatedRequest) {
     return this.sessionService.findByUserId(req.user.idUser);
@@ -107,7 +164,7 @@ export class AuthController {
     const authHeader = req.headers.authorization;
     const token = this.jwtService.extractTokenFromHeader(authHeader);
     if (token) {
-      this.tokenBlacklistService.add(token, 900);
+      await this.tokenBlacklistService.add(token, 900);
     }
 
     return { data: null, message: 'All sessions closed successfully' };

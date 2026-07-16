@@ -6,12 +6,15 @@ import {
   Patch,
   Param,
   Delete,
+  UseGuards,
 } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { SplitsService } from './splits.service';
 import { CreateSplitDto } from './dto/create-split.dto';
 import { UpdateSplitDto } from './dto/update-split.dto';
 
 @Controller('splits')
+@UseGuards(JwtAuthGuard)
 export class SplitsController {
   constructor(private readonly splitsService: SplitsService) {}
 
