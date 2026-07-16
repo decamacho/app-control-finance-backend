@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -7,6 +11,7 @@ import { JwtService } from '../jwt/jwt.service';
 import { SessionService } from '../session/session.service';
 import { LoginDto } from '../../dto/login.dto';
 import { AUTH_ERRORS, STATE_USER } from '../../types/auth.constants';
+import { RefreshPayload } from '../../interfaces/jwt-payload.interface';
 
 export interface UserLoginResponse {
   idUser: string;
@@ -100,5 +105,19 @@ export class AuthService {
         },
       },
     };
+  }
+
+  async logout(refreshToken: string): Promise<void> {
+    const payload = this.jwtService.verifyRefreshToken(
+      refreshToken,
+    ) as RefreshPayload;
+
+    const session = await this.sessionService.findById(payload.sessionId);
+
+    if (!session) {
+      throw new NotFoundException(AUTH_ERRORS.SESSION_NOT_FOUND);
+    }
+
+    await this.sessionService.invalidateSession(payload.sessionId, payload.sub);
   }
 }

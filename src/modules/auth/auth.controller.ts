@@ -13,8 +13,8 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { JwtService } from './services/jwt/jwt.service';
 import { AuthService } from './services/auth/auth.service';
+import { JwtService } from './services/jwt/jwt.service';
 import { RefreshTokenService } from './services/refresh-token/refresh-token.service';
 import { SessionService } from './services/session/session.service';
 import { TokenBlacklistService } from './services/token-blacklist/token-blacklist.service';
@@ -97,22 +97,33 @@ export class AuthController {
     @Req() req: AuthenticatedRequest,
   ) {
     await this.sessionService.invalidateSession(id, req.user.idUser);
-    return { message: 'Session closed successfully' };
+    return { data: null, message: 'Session closed successfully' };
   }
 
   @Delete('sessions')
   async deleteAllSessions(@Req() req: AuthenticatedRequest) {
     await this.sessionService.invalidateAllUserSessions(req.user.idUser);
-    return { message: 'All sessions closed successfully' };
-  }
 
-  @Post('logout')
-  logout(@Req() req: AuthenticatedRequest) {
     const authHeader = req.headers.authorization;
     const token = this.jwtService.extractTokenFromHeader(authHeader);
     if (token) {
       this.tokenBlacklistService.add(token, 900);
     }
-    return { message: 'Logged out successfully' };
+
+    return { data: null, message: 'All sessions closed successfully' };
+  }
+
+  @Public()
+  @Post('logout')
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    const refreshToken = req.cookies?.refreshToken as string | undefined;
+
+    if (refreshToken) {
+      await this.authService.logout(refreshToken);
+    }
+
+    res.clearCookie('refreshToken', { path: '/auth/refresh' });
+
+    return { data: null, message: 'Logged out successfully' };
   }
 }
