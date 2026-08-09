@@ -22,6 +22,7 @@ export const AUTH_ERRORS = {
   SAME_PASSWORD: 'New password must be different from current password',
   DEFAULT_ROLE_NOT_FOUND: 'Default role not found. Contact an administrator',
   USER_BLOCKED: 'User account is blocked',
+  EMAIL_SEND_FAILED: 'Could not send the email. Please try again later',
 } as const;
 
 export const STATE_USER = {

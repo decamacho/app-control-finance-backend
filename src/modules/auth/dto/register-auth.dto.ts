@@ -25,7 +25,7 @@ export class RegisterAuthDto {
   @IsNotEmpty()
   @IsString()
   @Length(8, 64)
-  @Matches(/((?=.*\d)|(?=.*\W+))(?![.\n])(?=.*[A-Z])(?=.*[a-f]).*$/, {
+  @Matches(/((?=.*\d)|(?=.*\W+))(?=.*[A-Z])(?=.*[a-z]).*$/, {
     message:
       'La contraseña es demasiado debil. Debe incluir al menos 1 mayuscula, 1 minuscula y 1 numero o caracter especial.',
   })

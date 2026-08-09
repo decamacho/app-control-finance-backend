@@ -30,18 +30,17 @@ export class SendgridProvider implements IEmailProvider {
       'noreply@walletai.app',
     );
 
-    try {
-      await this.mailService.send({
-        to: options.to,
-        from: fromEmail,
-        subject: options.subject,
-        html: options.html,
-      });
-      this.logger.log(`Email sent to ${options.to}: ${options.subject}`);
-    } catch (error) {
-      this.logger.error(
-        `Failed to send email to ${options.to}: ${(error as Error).message}`,
-      );
+    if (!this.configService.get<string>('SENDGRID_API_KEY')) {
+      throw new Error('SENDGRID_API_KEY is not configured');
     }
+
+    await this.mailService.send({
+      to: options.to,
+      from: fromEmail,
+      subject: options.subject,
+      html: options.html,
+    });
+
+    this.logger.log(`Email sent to ${options.to}: ${options.subject}`);
   }
 }

@@ -16,7 +16,6 @@ import { TokenBlacklistService } from './services/token-blacklist/token-blacklis
 import { EmailVerificationService } from './services/email-verification/email-verification.service';
 import { SendgridProvider } from './services/providers/sendgrid.provider';
 import { JwtStrategy } from './strategies/jwt.strategy';
-import { LocalStrategy } from './strategies/local.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { ActiveUserGuard } from './guards/active-user.guard';
@@ -53,7 +52,6 @@ import { EMAIL_PROVIDER_TOKEN } from './interfaces/email-provider.interface';
     },
     SendgridProvider,
     JwtStrategy,
-    LocalStrategy,
     JwtAuthGuard,
     RolesGuard,
     ActiveUserGuard,

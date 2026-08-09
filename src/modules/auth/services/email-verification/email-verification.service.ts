@@ -1,9 +1,9 @@
 import {
   Injectable,
   Inject,
-  Logger,
   BadRequestException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -12,12 +12,15 @@ import { User } from '../../../users/entities/user.entity';
 import { RedisService } from '../../../redis/redis.service';
 import type { IEmailProvider } from '../../interfaces/email-provider.interface';
 import { EMAIL_PROVIDER_TOKEN } from '../../interfaces/email-provider.interface';
-import { EMAIL_VERIFICATION, AUTH_ERRORS } from '../../types/auth.constants';
+import {
+  EMAIL_VERIFICATION,
+  AUTH_ERRORS,
+  STATE_USER,
+} from '../../types/auth.constants';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class EmailVerificationService {
-  private readonly logger = new Logger(EmailVerificationService.name);
   private readonly verificationUrl: string;
 
   constructor(
@@ -48,7 +51,12 @@ export class EmailVerificationService {
       EMAIL_VERIFICATION.TOKEN_TTL_SECONDS,
     );
 
-    await this.sendVerificationEmail(email, token);
+    try {
+      await this.sendVerificationEmail(email, token);
+    } catch {
+      await this.redisService.del(key);
+      throw new ServiceUnavailableException(AUTH_ERRORS.EMAIL_SEND_FAILED);
+    }
 
     return token;
   }
@@ -74,7 +82,7 @@ export class EmailVerificationService {
       throw new BadRequestException(AUTH_ERRORS.VERIFICATION_ALREADY_DONE);
     }
 
-    user.statusUser = 'ACTIVE';
+    user.statusUser = STATE_USER.ACTIVE;
     user.isVerifyUser = true;
     await this.userRepository.save(user);
 
@@ -102,16 +110,10 @@ export class EmailVerificationService {
       </div>
     `;
 
-    try {
-      await this.emailProvider.sendMail({
-        to,
-        subject: 'Verify your email - Wallet AI',
-        html,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to send verification email to ${to}: ${(error as Error).message}`,
-      );
-    }
+    await this.emailProvider.sendMail({
+      to,
+      subject: 'Verify your email - Wallet AI',
+      html,
+    });
   }
 }
