@@ -50,6 +50,7 @@ export class AuthController {
     return {
       data: result,
       message:
+        result.message ??
         'User registered successfully. Please check your email to verify your account.',
     };
   }
@@ -115,6 +116,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('resend-verify')
   @HttpCode(200)
   async resendVerify(@Body() resendVerifyDto: ResendVerifyDto) {
@@ -137,9 +139,28 @@ export class AuthController {
       changePasswordDto.currentPassword,
       changePasswordDto.newPassword,
     );
+
+    await this.sessionService.invalidateAllUserSessions(req.user.idUser);
+
+    const authHeader = req.headers.authorization;
+    const token = this.jwtService.extractTokenFromHeader(authHeader);
+    if (token) {
+      await this.tokenBlacklistService.add(token, 900);
+    }
+
     return {
       data: result,
-      message: 'Password changed successfully',
+      message:
+        'Password changed successfully. Please sign in again with your new password.',
+    };
+  }
+
+  @Get('profile')
+  async getProfile(@Req() req: AuthenticatedRequest) {
+    const result = await this.authService.getProfile(req.user.idUser);
+    return {
+      data: result,
+      message: 'Profile retrieved successfully',
     };
   }
 

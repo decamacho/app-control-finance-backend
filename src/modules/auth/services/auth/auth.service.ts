@@ -2,7 +2,6 @@ import {
   Injectable,
   UnauthorizedException,
   NotFoundException,
-  ConflictException,
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -39,6 +38,7 @@ export interface LoginResponse {
 export interface RegisterResponse {
   idUser: string;
   emailUser: string;
+  message?: string;
 }
 
 @Injectable()
@@ -137,7 +137,14 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new ConflictException(AUTH_ERRORS.EMAIL_ALREADY_EXISTS);
+      const message = existingUser.isVerifyUser
+        ? undefined
+        : await this.sendVerificationTokenOrMessage(
+            existingUser.idUser,
+            existingUser.emailUser,
+          );
+
+      return { idUser: '', emailUser: registerDto.emailUser, message };
     }
 
     const defaultRole = await this.roleRepository.findOne({
@@ -164,7 +171,7 @@ export class AuthService {
 
     const savedUser = await this.userRepository.save(newUser);
 
-    await this.emailVerificationService.generateAndSendToken(
+    const message = await this.sendVerificationTokenOrMessage(
       savedUser.idUser,
       savedUser.emailUser,
     );
@@ -172,7 +179,24 @@ export class AuthService {
     return {
       idUser: savedUser.idUser,
       emailUser: savedUser.emailUser,
+      message,
     };
+  }
+
+  private async sendVerificationTokenOrMessage(
+    idUser: string,
+    emailUser: string,
+  ): Promise<string | undefined> {
+    try {
+      await this.emailVerificationService.generateAndSendToken(
+        idUser,
+        emailUser,
+      );
+    } catch {
+      return 'User registered, but the verification email could not be sent. Please use the resend-verify endpoint.';
+    }
+
+    return undefined;
   }
 
   async verifyEmail(token: string): Promise<{ emailUser: string }> {
@@ -186,20 +210,14 @@ export class AuthService {
       where: { emailUser },
     });
 
-    if (!user) {
-      throw new NotFoundException(AUTH_ERRORS.USER_NOT_FOUND);
+    if (user && !user.isVerifyUser) {
+      await this.emailVerificationService.generateAndSendToken(
+        user.idUser,
+        user.emailUser,
+      );
     }
 
-    if (user.isVerifyUser) {
-      throw new BadRequestException(AUTH_ERRORS.VERIFICATION_ALREADY_DONE);
-    }
-
-    await this.emailVerificationService.generateAndSendToken(
-      user.idUser,
-      user.emailUser,
-    );
-
-    return { emailUser: user.emailUser };
+    return { emailUser };
   }
 
   async changePassword(
@@ -253,5 +271,29 @@ export class AuthService {
     }
 
     await this.sessionService.invalidateSession(payload.sessionId, payload.sub);
+  }
+
+  async getProfile(userId: string): Promise<UserLoginResponse> {
+    const user = await this.userRepository.findOne({
+      where: { idUser: userId },
+      relations: { role: true },
+    });
+
+    if (!user) {
+      throw new NotFoundException(AUTH_ERRORS.USER_NOT_FOUND);
+    }
+
+    return {
+      idUser: user.idUser,
+      nameUser: user.nameUser,
+      firstNameUser: user.firstNameUser,
+      lastNameUser: user.lastNameUser,
+      emailUser: user.emailUser,
+      phoneNumberUser: user.phoneNumberUser,
+      role: {
+        idRole: user.role.idRole,
+        nameRole: user.role.nameRole,
+      },
+    };
   }
 }
