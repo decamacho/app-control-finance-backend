@@ -5,6 +5,7 @@ import { UpdateCategoryDto } from './dto/update-category.dto';
 @Injectable()
 export class CategoriesService {
   create(createCategoryDto: CreateCategoryDto) {
+    void createCategoryDto;
     return 'This action adds a new category';
   }
 
@@ -17,6 +18,7 @@ export class CategoriesService {
   }
 
   update(id: number, updateCategoryDto: UpdateCategoryDto) {
+    void updateCategoryDto;
     return `This action updates a #${id} category`;
   }
 

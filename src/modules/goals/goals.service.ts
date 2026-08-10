@@ -5,6 +5,7 @@ import { UpdateGoalDto } from './dto/update-goal.dto';
 @Injectable()
 export class GoalsService {
   create(createGoalDto: CreateGoalDto) {
+    void createGoalDto;
     return 'This action adds a new goal';
   }
 
@@ -17,6 +18,7 @@ export class GoalsService {
   }
 
   update(id: number, updateGoalDto: UpdateGoalDto) {
+    void updateGoalDto;
     return `This action updates a #${id} goal`;
   }
 

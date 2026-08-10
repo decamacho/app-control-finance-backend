@@ -29,6 +29,21 @@ export class Transaction {
   @Column({ type: 'timestamp' })
   transactionDate!: Date;
 
+  @Column({ type: 'varchar', length: 3, default: 'COP' })
+  currencyTransaction!: string;
+
+  @Column({ type: 'uuid', nullable: true })
+  idParentTransaction!: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  isRecurring!: boolean;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  recurrencePattern!: string | null;
+
+  @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
+  stateTransaction!: string;
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
 
