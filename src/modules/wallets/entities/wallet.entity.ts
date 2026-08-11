@@ -29,6 +29,15 @@ export class Wallet {
   @Column({ type: 'varchar', length: 20, default: 'ACTIVE' })
   stateWallet!: string;
 
+  @Column({ type: 'text', nullable: true })
+  descriptionWallet!: string | null;
+
+  @Column({ type: 'varchar', length: 7, nullable: true })
+  colorWallet!: string | null;
+
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  iconWallet!: string | null;
+
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
 
