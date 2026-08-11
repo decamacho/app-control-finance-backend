@@ -11,6 +11,7 @@ import {
 import { Role } from './role.entity';
 import { WalletUser } from '../../wallets/entities/wallet-user.entity';
 import { Category } from '../../categories/entities/category.entity';
+import { Business } from '../../businesses/entities/business.entity';
 
 @Entity('users')
 export class User {
@@ -68,4 +69,7 @@ export class User {
 
   @OneToMany(() => Category, (category) => category.userOwner)
   customCategories!: Category[];
+
+  @OneToMany(() => Business, (business) => business.user)
+  businesses!: Business[];
 }

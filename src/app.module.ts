@@ -13,6 +13,7 @@ import { GoalsModule } from './modules/goals/goals.module';
 import { BudgetsModule } from './modules/budgets/budgets.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { RedisModule } from './modules/redis/redis.module';
+import { BusinessesModule } from './modules/businesses/businesses.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { RedisModule } from './modules/redis/redis.module';
     BudgetsModule,
     AuthModule,
     RedisModule,
+    BusinessesModule,
   ],
   providers: [
     {
