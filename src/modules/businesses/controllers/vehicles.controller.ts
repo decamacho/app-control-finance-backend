@@ -7,62 +7,72 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { IdBusinessPipe } from '../../../common/pipes/id-business.pipe';
 import { User } from '../../users/entities/user.entity';
-import { ParkingRatesService } from '../services/parking-rates.service';
-import { UpsertRatesDto, UpdateRateDto } from '../dto/parking.dto';
+import { VehiclesService } from '../services/vehicles.service';
+import {
+  CreateVehicleDto,
+  UpdateVehicleDto,
+  VehicleQueryDto,
+} from '../dto/parking.dto';
 
-@Controller('businesses/:idBusiness/parking-rates')
+@Controller('businesses/:idBusiness/vehicles')
 @UseGuards(JwtAuthGuard)
-export class ParkingRatesController {
-  constructor(private readonly parkingRatesService: ParkingRatesService) {}
+export class VehiclesController {
+  constructor(private readonly vehiclesService: VehiclesService) {}
 
   @Get()
   findAll(
     @Param('idBusiness', IdBusinessPipe) idBusiness: string,
+    @Query() vehicleQueryDto: VehicleQueryDto,
     @CurrentUser() user: User,
   ) {
-    return this.parkingRatesService.findAll(idBusiness, user.idUser);
+    return this.vehiclesService.findAll(
+      idBusiness,
+      vehicleQueryDto,
+      user.idUser,
+    );
   }
 
   @Post()
-  upsert(
+  create(
     @Param('idBusiness', IdBusinessPipe) idBusiness: string,
-    @Body() upsertRatesDto: UpsertRatesDto,
+    @Body() createVehicleDto: CreateVehicleDto,
     @CurrentUser() user: User,
   ) {
-    return this.parkingRatesService.upsert(
+    return this.vehiclesService.create(
       idBusiness,
-      upsertRatesDto,
+      createVehicleDto,
       user.idUser,
     );
   }
 
-  @Patch(':idRate')
+  @Patch(':idVehicle')
   update(
     @Param('idBusiness', IdBusinessPipe) idBusiness: string,
-    @Param('idRate', ParseUUIDPipe) idRate: string,
-    @Body() updateRateDto: UpdateRateDto,
+    @Param('idVehicle', ParseUUIDPipe) idVehicle: string,
+    @Body() updateVehicleDto: UpdateVehicleDto,
     @CurrentUser() user: User,
   ) {
-    return this.parkingRatesService.update(
+    return this.vehiclesService.update(
       idBusiness,
-      idRate,
-      updateRateDto,
+      idVehicle,
+      updateVehicleDto,
       user.idUser,
     );
   }
 
-  @Delete(':idRate')
+  @Delete(':idVehicle')
   remove(
     @Param('idBusiness', IdBusinessPipe) idBusiness: string,
-    @Param('idRate', ParseUUIDPipe) idRate: string,
+    @Param('idVehicle', ParseUUIDPipe) idVehicle: string,
     @CurrentUser() user: User,
   ) {
-    return this.parkingRatesService.remove(idBusiness, idRate, user.idUser);
+    return this.vehiclesService.remove(idBusiness, idVehicle, user.idUser);
   }
 }

@@ -6,6 +6,7 @@ import { ParkingRatesController } from './controllers/parking-rates.controller';
 import { FoodSalesController } from './controllers/food-sales.controller';
 import { CustomersController } from './controllers/customers.controller';
 import { ProductsController } from './controllers/products.controller';
+import { VehiclesController } from './controllers/vehicles.controller';
 import { BusinessesService } from './services/businesses.service';
 import { BusinessValidatorService } from './services/business-validator.service';
 import { ParkingService } from './services/parking.service';
@@ -15,6 +16,7 @@ import { CustomersService } from './services/customers.service';
 import { ProductsService } from './services/products.service';
 import { FoodSalesService } from './services/food-sales.service';
 import { PaymentsService } from './services/payments.service';
+import { VehiclesService } from './services/vehicles.service';
 import { Business } from './entities/business.entity';
 import { Vehicle } from './entities/vehicle.entity';
 import { ParkingRate } from './entities/parking-rate.entity';
@@ -34,6 +36,7 @@ import { Transaction } from '../transactions/entities/transaction.entity';
     FoodSalesController,
     CustomersController,
     ProductsController,
+    VehiclesController,
   ],
   providers: [
     BusinessesService,
@@ -45,6 +48,7 @@ import { Transaction } from '../transactions/entities/transaction.entity';
     ProductsService,
     FoodSalesService,
     PaymentsService,
+    VehiclesService,
   ],
   imports: [
     TypeOrmModule.forFeature([

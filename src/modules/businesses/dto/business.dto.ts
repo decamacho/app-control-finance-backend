@@ -1,5 +1,5 @@
 import { PartialType } from '@nestjs/mapped-types';
-import { IsEnum, IsIn, IsNotEmpty, IsString, MaxLength } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { BusinessType } from '../entities/business.entity';
 
 export class CreateBusinessDto {
@@ -14,9 +14,4 @@ export class CreateBusinessDto {
   businessType!: BusinessType;
 }
 
-export class UpdateBusinessDto extends PartialType(CreateBusinessDto) {
-  @IsIn(['ACTIVE', 'INACTIVE'], {
-    message: 'statusBusiness debe ser ACTIVE o INACTIVE',
-  })
-  statusBusiness?: string;
-}
+export class UpdateBusinessDto extends PartialType(CreateBusinessDto) {}

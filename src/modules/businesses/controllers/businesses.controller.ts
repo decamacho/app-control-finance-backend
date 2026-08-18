@@ -4,13 +4,15 @@ import {
   Delete,
   Get,
   Param,
-  ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../../auth/guards/roles.guard';
+import { Roles } from '../../auth/decorators/roles.decorator';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { IdBusinessPipe } from '../../../common/pipes/id-business.pipe';
 import { User } from '../../users/entities/user.entity';
 import { BusinessesService } from '../services/businesses.service';
 import { CreateBusinessDto, UpdateBusinessDto } from '../dto/business.dto';
@@ -21,6 +23,8 @@ export class BusinessesController {
   constructor(private readonly businessesService: BusinessesService) {}
 
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
   create(
     @Body() createBusinessDto: CreateBusinessDto,
     @CurrentUser() user: User,
@@ -35,7 +39,7 @@ export class BusinessesController {
 
   @Get(':idBusiness')
   findOne(
-    @Param('idBusiness', ParseUUIDPipe) idBusiness: string,
+    @Param('idBusiness', IdBusinessPipe) idBusiness: string,
     @CurrentUser() user: User,
   ) {
     return this.businessesService.findOne(idBusiness, user.idUser);
@@ -43,7 +47,7 @@ export class BusinessesController {
 
   @Patch(':idBusiness')
   update(
-    @Param('idBusiness', ParseUUIDPipe) idBusiness: string,
+    @Param('idBusiness', IdBusinessPipe) idBusiness: string,
     @Body() updateBusinessDto: UpdateBusinessDto,
     @CurrentUser() user: User,
   ) {
@@ -56,7 +60,7 @@ export class BusinessesController {
 
   @Delete(':idBusiness')
   remove(
-    @Param('idBusiness', ParseUUIDPipe) idBusiness: string,
+    @Param('idBusiness', IdBusinessPipe) idBusiness: string,
     @CurrentUser() user: User,
   ) {
     return this.businessesService.remove(idBusiness, user.idUser);

@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,13 +9,17 @@ import { Business, BusinessType } from '../entities/business.entity';
 import { ParkingTicket, TicketStatus } from '../entities/parking-ticket.entity';
 import { Vehicle, VehicleType } from '../entities/vehicle.entity';
 import { ParkingRate, ShiftType } from '../entities/parking-rate.entity';
+import { Payment } from '../entities/payment.entity';
 import {
   ExitTicketDto,
+  MonthlyActivationDto,
   RegisterEntryDto,
   TicketQueryDto,
 } from '../dto/parking.dto';
 import { BusinessValidatorService } from './business-validator.service';
 import { PricingService, RateMap } from './pricing.service';
+import { PaymentStatus } from '../types/payment.enum';
+import { normalizePlate, validatePlateFormat } from '../utils/plate.util';
 
 @Injectable()
 export class ParkingService {
@@ -27,38 +30,44 @@ export class ParkingService {
     private readonly ticketRepository: Repository<ParkingTicket>,
     @InjectRepository(ParkingRate)
     private readonly rateRepository: Repository<ParkingRate>,
+    @InjectRepository(Payment)
+    private readonly paymentRepository: Repository<Payment>,
     private readonly validator: BusinessValidatorService,
     private readonly pricingService: PricingService,
   ) {}
 
   async registerEntry(dto: RegisterEntryDto, idUser: string) {
     const business = await this.assertParkingBusiness(dto.idBusiness, idUser);
-    const licensePlate = this.normalizePlate(dto.licensePlate);
+    const licensePlate = normalizePlate(dto.licensePlate);
 
-    let vehicle = await this.vehicleRepository.findOne({
+    const vehicle = await this.vehicleRepository.findOne({
       where: { business: { idBusiness: business.idBusiness }, licensePlate },
     });
 
     if (!vehicle) {
-      if (!dto.vehicleType) {
-        throw new BadRequestException(
-          'vehicleType es obligatorio al registrar un vehiculo nuevo',
-        );
-      }
-
-      vehicle = this.vehicleRepository.create({
-        licensePlate,
-        vehicleType: dto.vehicleType,
-        color: dto.color ?? '',
-        brand: dto.brand ?? null,
-        model: dto.model ?? null,
-        photoUrl: dto.photoUrl ?? null,
-        business: { idBusiness: business.idBusiness },
-      });
-      vehicle = await this.vehicleRepository.save(vehicle);
+      throw new BadRequestException('El vehiculo no esta registrado');
     }
 
-    await this.assertNoActiveTicket(vehicle.idVehicle);
+    validatePlateFormat(licensePlate, vehicle.vehicleType);
+
+    if (this.hasActiveMonthly(vehicle)) {
+      throw new BadRequestException(
+        'El vehiculo tiene una mensualidad activa; debe cancelarla',
+      );
+    }
+
+    const activeTicket = await this.findActiveTicket(vehicle.idVehicle);
+
+    if (activeTicket) {
+      const exitTime = new Date();
+      this.requireExitAfterEntry(activeTicket, exitTime);
+      const settled = await this.settleTicket(activeTicket, exitTime);
+
+      return {
+        data: settled,
+        message: 'Salida registrada correctamente',
+      };
+    }
 
     const ticket = this.ticketRepository.create({
       entryTime: new Date(),
@@ -78,6 +87,12 @@ export class ParkingService {
   async completeExit(idTicket: string, dto: ExitTicketDto, idUser: string) {
     const ticket = await this.findOwnedTicket(idTicket, idUser);
 
+    if (this.hasActiveMonthly(ticket.vehicle)) {
+      throw new BadRequestException(
+        'El vehiculo tiene una mensualidad activa; debe cancelarla',
+      );
+    }
+
     if (ticket.statusTicket !== TicketStatus.ACTIVE) {
       throw new BadRequestException(
         'El ticket no se encuentra activo; no es posible liquidarlo',
@@ -85,32 +100,121 @@ export class ParkingService {
     }
 
     const exitTime = dto.exitTime ?? new Date();
-    if (exitTime.getTime() <= ticket.entryTime.getTime()) {
-      throw new BadRequestException(
-        'La salida debe ser posterior a la entrada del vehiculo',
-      );
-    }
+    this.requireExitAfterEntry(ticket, exitTime);
 
-    const rates = await this.getRatesForVehicle(
-      ticket.business.idBusiness,
-      ticket.vehicle.vehicleType,
-    );
-
-    const totalAmount = this.pricingService.calculateTotal(
-      ticket.entryTime,
-      exitTime,
-      rates,
-    );
-
-    ticket.exitTime = exitTime;
-    ticket.totalAmount = totalAmount;
-    ticket.statusTicket = TicketStatus.COMPLETED;
-
-    const saved = await this.ticketRepository.save(ticket);
+    const saved = await this.settleTicket(ticket, exitTime);
 
     return {
       data: saved,
       message: 'Salida registrada y total liquidado',
+    };
+  }
+
+  async registerMonthly(
+    idTicket: string,
+    dto: MonthlyActivationDto,
+    idUser: string,
+  ) {
+    const ticket = await this.findOwnedTicket(idTicket, idUser);
+
+    if (ticket.statusTicket !== TicketStatus.ACTIVE) {
+      throw new BadRequestException(
+        'Solo se puede activar la mensualidad con un ticket activo',
+      );
+    }
+
+    const monthlyRate = await this.rateRepository.findOne({
+      where: {
+        business: { idBusiness: ticket.business.idBusiness },
+        vehicleType: ticket.vehicle.vehicleType,
+        shiftType: ShiftType.MONTHLY,
+      },
+    });
+
+    if (!monthlyRate) {
+      throw new BadRequestException(
+        'No hay tarifa mensual configurada para este tipo de vehiculo',
+      );
+    }
+
+    const vehicle = ticket.vehicle;
+    vehicle.monthlyStartDate = dto.startDate ?? new Date();
+    vehicle.monthlyEndDate = null;
+    await this.vehicleRepository.save(vehicle);
+
+    const payment = this.paymentRepository.create({
+      amount: dto.paymentMethod ? Number(monthlyRate.price) : 0,
+      paymentMethod: dto.paymentMethod ?? null,
+      ticket: { idTicket },
+    });
+    const savedPayment = await this.paymentRepository.save(payment);
+
+    return {
+      data: {
+        payment: savedPayment,
+        vehicle,
+        monthlyPrice: Number(monthlyRate.price),
+      },
+      message: 'Mensualidad activada correctamente',
+    };
+  }
+
+  async cancelMonthly(idTicket: string, idUser: string) {
+    const ticket = await this.findOwnedTicket(idTicket, idUser);
+    const vehicle = ticket.vehicle;
+
+    if (!vehicle.monthlyStartDate) {
+      throw new BadRequestException('El vehiculo no tiene mensualidad activa');
+    }
+    if (vehicle.monthlyEndDate) {
+      throw new BadRequestException(
+        'La mensualidad ya no se encuentra vigente',
+      );
+    }
+
+    const endDate = new Date();
+    vehicle.monthlyEndDate = endDate;
+    await this.vehicleRepository.save(vehicle);
+
+    const tickets = await this.ticketRepository.find({
+      where: {
+        vehicle: { idVehicle: vehicle.idVehicle },
+        statusTicket: TicketStatus.COMPLETED,
+      },
+      relations: { business: true },
+    });
+
+    let recalculated = 0;
+    for (const t of tickets) {
+      const total = Number(t.totalAmount ?? 0);
+      const isCovered = total === 0 && t.entryTime >= vehicle.monthlyStartDate;
+      if (!isCovered) {
+        continue;
+      }
+
+      const rates = await this.getRatesForVehicle(
+        t.business.idBusiness,
+        vehicle.vehicleType,
+      );
+      const newTotal =
+        t.exitTime && t.exitTime.getTime() > t.entryTime.getTime()
+          ? this.pricingService.calculateTotal(t.entryTime, t.exitTime, rates)
+          : 0;
+
+      t.totalAmount = newTotal;
+      t.paymentStatus =
+        newTotal === 0
+          ? PaymentStatus.PAID
+          : Number(t.paidAmount) > 0
+            ? PaymentStatus.PARTIAL
+            : PaymentStatus.PENDING;
+      await this.ticketRepository.save(t);
+      recalculated++;
+    }
+
+    return {
+      data: { vehicle, recalculatedTickets: recalculated },
+      message: 'Mensualidad cancelada y dias liquidados',
     };
   }
 
@@ -133,7 +237,7 @@ export class ParkingService {
   async findActiveByPlate(query: TicketQueryDto, idUser: string) {
     await this.assertParkingBusiness(query.idBusiness, idUser);
 
-    const licensePlate = this.normalizePlate(query.licensePlate ?? '');
+    const licensePlate = normalizePlate(query.licensePlate ?? '');
     const vehicle = await this.vehicleRepository.findOne({
       where: { business: { idBusiness: query.idBusiness }, licensePlate },
     });
@@ -176,16 +280,81 @@ export class ParkingService {
     });
 
     return {
-      data: tickets.map((ticket) => {
-        const total = Number(ticket.totalAmount ?? 0);
-        const paid = Number(ticket.paidAmount ?? 0);
-        return {
-          ...ticket,
-          pendingAmount: Math.round((total - paid) * 100) / 100,
-        };
-      }),
+      data: this.withPendingAmount(tickets),
       message: tickets.length ? undefined : 'No se encontraron tickets',
     };
+  }
+
+  async findActives(query: TicketQueryDto, idUser: string) {
+    await this.assertParkingBusiness(query.idBusiness, idUser);
+
+    const tickets = await this.ticketRepository.find({
+      where: {
+        business: { idBusiness: query.idBusiness },
+        statusTicket: TicketStatus.ACTIVE,
+      },
+      relations: { vehicle: true },
+      order: { entryTime: 'DESC' },
+    });
+
+    return {
+      data: this.withPendingAmount(tickets),
+      message: tickets.length ? undefined : 'No hay tickets activos',
+    };
+  }
+
+  private withPendingAmount(tickets: ParkingTicket[]) {
+    return tickets.map((ticket) => {
+      const total = Number(ticket.totalAmount ?? 0);
+      const paid = Number(ticket.paidAmount ?? 0);
+      return {
+        ...ticket,
+        pendingAmount: Math.round((total - paid) * 100) / 100,
+      };
+    });
+  }
+
+  private async settleTicket(ticket: ParkingTicket, exitTime: Date) {
+    const coveredByMonthly = this.isCoveredByMonthly(ticket);
+    const totalAmount = coveredByMonthly
+      ? 0
+      : this.pricingService.calculateTotal(
+          ticket.entryTime,
+          exitTime,
+          await this.getRatesForVehicle(
+            ticket.business.idBusiness,
+            ticket.vehicle.vehicleType,
+          ),
+        );
+
+    ticket.exitTime = exitTime;
+    ticket.totalAmount = totalAmount;
+    ticket.statusTicket = TicketStatus.COMPLETED;
+
+    if (coveredByMonthly) {
+      ticket.paidAmount = 0;
+      ticket.paymentStatus = PaymentStatus.PAID;
+    }
+
+    return this.ticketRepository.save(ticket);
+  }
+
+  private isCoveredByMonthly(ticket: ParkingTicket): boolean {
+    const vehicle = ticket.vehicle;
+    if (!vehicle.monthlyStartDate) {
+      return false;
+    }
+    if (ticket.entryTime < vehicle.monthlyStartDate) {
+      return false;
+    }
+    if (vehicle.monthlyEndDate && ticket.entryTime > vehicle.monthlyEndDate) {
+      return false;
+    }
+    return true;
+  }
+
+  private hasActiveMonthly(vehicle: Vehicle): boolean {
+    return !!vehicle.monthlyStartDate && !vehicle.monthlyEndDate;
   }
 
   private async assertParkingBusiness(
@@ -221,17 +390,22 @@ export class ParkingService {
     return ticket;
   }
 
-  private async assertNoActiveTicket(idVehicle: string): Promise<void> {
-    const active = await this.ticketRepository.findOne({
+  private async findActiveTicket(
+    idVehicle: string,
+  ): Promise<ParkingTicket | null> {
+    return this.ticketRepository.findOne({
       where: {
         vehicle: { idVehicle },
         statusTicket: TicketStatus.ACTIVE,
       },
+      relations: { business: true, vehicle: true },
     });
+  }
 
-    if (active) {
-      throw new ConflictException(
-        'El vehiculo ya se encuentra dentro del parqueadero',
+  private requireExitAfterEntry(ticket: ParkingTicket, exitTime: Date): void {
+    if (exitTime.getTime() <= ticket.entryTime.getTime()) {
+      throw new BadRequestException(
+        'La salida debe ser posterior a la entrada del vehiculo',
       );
     }
   }
@@ -248,15 +422,26 @@ export class ParkingService {
       [ShiftType.DAY]: undefined,
       [ShiftType.NIGHT]: undefined,
       [ShiftType.HOUR]: undefined,
-    } as unknown as Record<string, number | undefined>;
+    } as Record<
+      ShiftType.DAY | ShiftType.NIGHT | ShiftType.HOUR,
+      number | undefined
+    >;
 
     for (const rate of rates) {
-      rateMap[rate.shiftType] = Number(rate.price);
+      if (rate.shiftType in rateMap) {
+        rateMap[
+          rate.shiftType as ShiftType.DAY | ShiftType.NIGHT | ShiftType.HOUR
+        ] = Number(rate.price);
+      }
     }
 
-    const missing = (Object.keys(rateMap) as ShiftType[]).filter(
-      (key) => rateMap[key] === undefined,
-    );
+    const missing = (
+      Object.keys(rateMap) as (
+        | ShiftType.DAY
+        | ShiftType.NIGHT
+        | ShiftType.HOUR
+      )[]
+    ).filter((key) => rateMap[key] === undefined);
 
     if (missing.length > 0) {
       throw new BadRequestException(
@@ -265,9 +450,5 @@ export class ParkingService {
     }
 
     return rateMap as unknown as RateMap;
-  }
-
-  private normalizePlate(licensePlate: string): string {
-    return licensePlate.trim().toUpperCase().replace(/\s+/g, '');
   }
 }

@@ -1,13 +1,15 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ParkingRate } from '../entities/parking-rate.entity';
+import { ParkingRate, ShiftType } from '../entities/parking-rate.entity';
 import { Business, BusinessType } from '../entities/business.entity';
-import { CreateRateDto, UpdateRateDto } from '../dto/parking.dto';
+import { VehicleType } from '../entities/vehicle.entity';
+import { UpsertRatesDto, UpdateRateDto } from '../dto/parking.dto';
 import { BusinessValidatorService } from './business-validator.service';
 
 interface PostgresError {
@@ -33,39 +35,71 @@ export class ParkingRatesService {
     });
 
     return {
-      data: rates,
+      data: rates.map((rate) => this.toRateResponse(rate)),
       message: rates.length
         ? undefined
         : 'Este negocio no tiene tarifas configuradas',
     };
   }
 
-  async create(idBusiness: string, dto: CreateRateDto, idUser: string) {
+  async upsert(idBusiness: string, dto: UpsertRatesDto, idUser: string) {
     const business = await this.assertParkingBusiness(idBusiness, idUser);
-    await this.assertNoDuplicate(idBusiness, dto.vehicleType, dto.shiftType);
 
-    const rate = this.rateRepository.create({
-      price: dto.price,
-      vehicleType: dto.vehicleType,
-      shiftType: dto.shiftType,
-      business: { idBusiness: business.idBusiness },
-    });
-
-    try {
-      const saved = await this.rateRepository.save(rate);
-      return {
-        data: saved,
-        message: 'Tarifa creada exitosamente',
-      };
-    } catch (error: unknown) {
-      const dbError = error as PostgresError;
-      if (dbError.code === '23505') {
-        throw new ConflictException(
-          'Ya existe una tarifa para esa combinacion de vehiculo y franja',
-        );
-      }
-      throw error;
+    const providedTypes = Object.keys(dto.rates) as VehicleType[];
+    const unknownTypes = providedTypes.filter(
+      (type) => !Object.values(VehicleType).includes(type),
+    );
+    if (unknownTypes.length > 0) {
+      throw new BadRequestException(
+        `rates contiene tipos de vehiculo no validos: ${unknownTypes.join(', ')}`,
+      );
     }
+
+    const missingTypes = Object.values(VehicleType).filter(
+      (type) => !dto.rates[type],
+    );
+    if (missingTypes.length > 0) {
+      throw new BadRequestException(
+        `rates debe incluir todos los tipos de vehiculo (faltan: ${missingTypes.join(', ')})`,
+      );
+    }
+
+    const existing = await this.rateRepository.find({
+      where: { business: { idBusiness } },
+    });
+    const existingMap = new Map(
+      existing.map((rate) => [`${rate.vehicleType}-${rate.shiftType}`, rate]),
+    );
+
+    const toSave = Object.values(VehicleType).flatMap((vehicleType) =>
+      Object.values(ShiftType).map((shiftType) => {
+        const key = `${vehicleType}-${shiftType}`;
+        const found = existingMap.get(key);
+        if (found) {
+          found.price =
+            dto.rates[vehicleType][
+              shiftType as keyof UpsertRatesDto['rates'][VehicleType]
+            ];
+          return found;
+        }
+        return this.rateRepository.create({
+          price:
+            dto.rates[vehicleType][
+              shiftType as keyof UpsertRatesDto['rates'][VehicleType]
+            ],
+          vehicleType,
+          shiftType,
+          business: { idBusiness: business.idBusiness },
+        });
+      }),
+    );
+
+    const saved = await this.rateRepository.save(toSave);
+
+    return {
+      data: saved.map((rate) => this.toRateResponse(rate)),
+      message: 'Tarifas configuradas exitosamente',
+    };
   }
 
   async update(
@@ -99,7 +133,7 @@ export class ParkingRatesService {
     try {
       const saved = await this.rateRepository.save(rate);
       return {
-        data: saved,
+        data: this.toRateResponse(saved),
         message: 'Tarifa actualizada exitosamente',
       };
     } catch (error: unknown) {
@@ -146,8 +180,8 @@ export class ParkingRatesService {
 
   private async assertNoDuplicate(
     idBusiness: string,
-    vehicleType: CreateRateDto['vehicleType'],
-    shiftType: CreateRateDto['shiftType'],
+    vehicleType: VehicleType,
+    shiftType: ShiftType,
   ): Promise<void> {
     const existing = await this.rateRepository.findOne({
       where: { business: { idBusiness }, vehicleType, shiftType },
@@ -158,5 +192,14 @@ export class ParkingRatesService {
         'Ya existe una tarifa para esa combinacion de vehiculo y franja',
       );
     }
+  }
+
+  private toRateResponse(rate: ParkingRate) {
+    return {
+      idRate: rate.idRate,
+      price: rate.price,
+      vehicleType: rate.vehicleType,
+      shiftType: rate.shiftType,
+    };
   }
 }

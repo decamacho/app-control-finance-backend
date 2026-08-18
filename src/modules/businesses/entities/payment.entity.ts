@@ -18,8 +18,8 @@ export class Payment {
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   amount!: number;
 
-  @Column({ type: 'enum', enum: PaymentMethod })
-  paymentMethod!: PaymentMethod;
+  @Column({ type: 'enum', enum: PaymentMethod, nullable: true })
+  paymentMethod!: PaymentMethod | null;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;

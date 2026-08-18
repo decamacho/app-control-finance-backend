@@ -13,10 +13,11 @@ export enum ShiftType {
   DAY = 'DAY',
   NIGHT = 'NIGHT',
   HOUR = 'HOUR',
+  MONTHLY = 'MONTHLY',
 }
 
 @Entity('parking_rates')
-@Index(['idBusiness', 'vehicleType', 'shiftType'], { unique: true })
+@Index(['business', 'vehicleType', 'shiftType'], { unique: true })
 export class ParkingRate {
   @PrimaryGeneratedColumn('uuid')
   idRate!: string;

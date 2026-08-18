@@ -74,7 +74,9 @@ export class PaymentsService {
 
     return {
       data: {
-        payments: paymentsSaved,
+        payments: paymentsSaved.map((payment) =>
+          this.toPaymentResponse(payment),
+        ),
         order: {
           ...orderSaved,
           pendingAmount: this.pendingAmount(total, roundedPaid),
@@ -133,7 +135,9 @@ export class PaymentsService {
 
     return {
       data: {
-        payments: paymentsSaved,
+        payments: paymentsSaved.map((payment) =>
+          this.toPaymentResponse(payment),
+        ),
         ticket: {
           ...ticketSaved,
           pendingAmount: this.pendingAmount(total, roundedPaid),
@@ -157,7 +161,7 @@ export class PaymentsService {
     });
 
     return {
-      data: payments,
+      data: payments.map((payment) => this.toPaymentResponse(payment)),
       message: payments.length
         ? undefined
         : 'Este pedido no tiene pagos registrados',
@@ -178,7 +182,7 @@ export class PaymentsService {
     });
 
     return {
-      data: payments,
+      data: payments.map((payment) => this.toPaymentResponse(payment)),
       message: payments.length
         ? undefined
         : 'Este ticket no tiene pagos registrados',
@@ -187,6 +191,14 @@ export class PaymentsService {
 
   private pendingAmount(total: number, paid: number): number {
     return Math.round((total - paid) * 100) / 100;
+  }
+
+  private toPaymentResponse(payment: Payment) {
+    return {
+      idPayment: payment.idPayment,
+      amount: payment.amount,
+      paymentMethod: payment.paymentMethod,
+    };
   }
 
   private async findOrder(idOrder: string): Promise<BusinessOrder> {

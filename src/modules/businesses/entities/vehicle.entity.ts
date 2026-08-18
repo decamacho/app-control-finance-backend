@@ -17,7 +17,7 @@ export enum VehicleType {
 }
 
 @Entity('vehicles')
-@Index(['idBusiness', 'licensePlate'], { unique: true })
+@Index(['business', 'licensePlate'], { unique: true })
 export class Vehicle {
   @PrimaryGeneratedColumn('uuid')
   idVehicle!: string;
@@ -39,6 +39,21 @@ export class Vehicle {
 
   @Column({ type: 'varchar', length: 500, nullable: true })
   photoUrl!: string | null;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  ownerName!: string | null;
+
+  @Column({ type: 'varchar', length: 30, nullable: true })
+  phoneOwner!: string | null;
+
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  emailOwner!: string | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  monthlyStartDate!: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  monthlyEndDate!: Date | null;
 
   @ManyToOne(() => Business, (business) => business.vehicles, {
     onDelete: 'CASCADE',

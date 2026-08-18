@@ -20,10 +20,22 @@ describe('BusinessesService', () => {
     user: { idUser: 'user-1' },
   };
 
+  const cleanResponse = {
+    idBusiness: 'business-1',
+    nameBusiness: 'Parqueadero El Centro',
+    businessType: BusinessType.PARKING,
+  };
+
   beforeEach(async () => {
     businessRepository = {
       create: jest.fn().mockImplementation((value: unknown) => value),
-      save: jest.fn().mockImplementation((value: unknown) => value),
+      save: jest.fn().mockImplementation((value: { idBusiness?: string }) => ({
+        ...value,
+        idBusiness: value.idBusiness ?? 'business-1',
+        createdAt: new Date(),
+        modifyAt: new Date(),
+        user: { idUser: 'user-1' },
+      })),
       find: jest.fn(),
       findOne: jest.fn(),
     };
@@ -65,7 +77,9 @@ describe('BusinessesService', () => {
           user: { idUser: 'user-1' },
         }),
       );
-      expect(result.data).toHaveProperty('statusBusiness', 'ACTIVE');
+      expect(result.data).toEqual(cleanResponse);
+      expect(result.data).not.toHaveProperty('statusBusiness');
+      expect(result.data).not.toHaveProperty('user');
       expect(result.message).toBe('Negocio creado exitosamente');
     });
 
@@ -82,7 +96,7 @@ describe('BusinessesService', () => {
   });
 
   describe('findAll', () => {
-    it('retorna solo negocios activos del usuario', async () => {
+    it('retorna solo negocios activos del usuario sin campos internos', async () => {
       businessRepository.find.mockResolvedValue([business]);
 
       const result = await service.findAll('user-1');
@@ -91,7 +105,11 @@ describe('BusinessesService', () => {
         where: { user: { idUser: 'user-1' }, statusBusiness: 'ACTIVE' },
         order: { createdAt: 'DESC' },
       });
-      expect(result.data).toHaveLength(1);
+      expect(result.data).toEqual([cleanResponse]);
+      expect(result.data[0]).not.toHaveProperty('statusBusiness');
+      expect(result.data[0]).not.toHaveProperty('user');
+      expect(result.data[0]).not.toHaveProperty('createdAt');
+      expect(result.data[0]).not.toHaveProperty('modifyAt');
       expect(result.message).toBeUndefined();
     });
 
@@ -113,7 +131,8 @@ describe('BusinessesService', () => {
 
       const result = await service.findOne('business-1', 'user-1');
 
-      expect(result.data).toEqual(business);
+      expect(result.data).toEqual(cleanResponse);
+      expect(result.data).not.toHaveProperty('statusBusiness');
     });
 
     it('lanza NotFoundException si el negocio no pertenece al usuario', async () => {
@@ -126,11 +145,10 @@ describe('BusinessesService', () => {
   });
 
   describe('update', () => {
-    it('actualiza los campos editables del negocio', async () => {
+    it('actualiza solo el nombre del negocio', async () => {
       const current = {
         ...business,
         nameBusiness: 'Viejo nombre',
-        businessType: BusinessType.OTHER,
       };
       businessRepository.findOne.mockResolvedValue(current);
 
@@ -141,8 +159,15 @@ describe('BusinessesService', () => {
       );
 
       expect(businessRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ nameBusiness: 'Parqueadero El Centro' }),
+        expect.objectContaining({
+          nameBusiness: 'Parqueadero El Centro',
+          businessType: BusinessType.PARKING,
+          statusBusiness: 'ACTIVE',
+        }),
       );
+      expect(result.data).toEqual(cleanResponse);
+      expect(result.data).not.toHaveProperty('user');
+      expect(result.data).not.toHaveProperty('createdAt');
       expect(result.message).toBe('Negocio actualizado exitosamente');
     });
 
@@ -165,6 +190,8 @@ describe('BusinessesService', () => {
       expect(businessRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({ statusBusiness: 'INACTIVE' }),
       );
+      expect(result.data).toEqual(cleanResponse);
+      expect(result.data).not.toHaveProperty('statusBusiness');
       expect(result.message).toBe('Negocio desactivado exitosamente');
     });
   });

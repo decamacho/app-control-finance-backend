@@ -40,7 +40,15 @@ describe('PaymentsService', () => {
   beforeEach(async () => {
     paymentRepository = {
       create: jest.fn().mockImplementation((value: unknown) => value),
-      save: jest.fn().mockImplementation((value: unknown) => value),
+      save: jest.fn().mockImplementation((value: unknown) =>
+        (Array.isArray(value) ? value : [value]).map(
+          (payment: { idPayment?: string }) => ({
+            ...payment,
+            idPayment: payment.idPayment ?? 'payment-1',
+            createdAt: new Date(),
+          }),
+        ),
+      ),
       find: jest.fn(),
     };
     orderRepository = {
@@ -105,6 +113,7 @@ describe('PaymentsService', () => {
         }),
       );
       expect(result.data.order.pendingAmount).toBe(7000);
+      expect(result.data.payments[0]).not.toHaveProperty('createdAt');
       expect(result.message).toBe('Pago registrado correctamente');
     });
 
@@ -233,6 +242,7 @@ describe('PaymentsService', () => {
         }),
       );
       expect(result.data.ticket.pendingAmount).toBe(5000);
+      expect(result.data.payments[0]).not.toHaveProperty('createdAt');
       expect(result.message).toBe('Pago registrado correctamente');
     });
 
@@ -288,7 +298,7 @@ describe('PaymentsService', () => {
     it('lista los pagos del pedido', async () => {
       orderRepository.findOne.mockResolvedValue(baseOrder());
       paymentRepository.find.mockResolvedValue([
-        { idPayment: 'payment-1', amount: 3000 },
+        { idPayment: 'payment-1', amount: 3000, createdAt: new Date() },
       ]);
 
       const result = await service.findOrderPayments('order-1', 'user-1');
@@ -298,6 +308,7 @@ describe('PaymentsService', () => {
         order: { createdAt: 'DESC' },
       });
       expect(result.data).toHaveLength(1);
+      expect(result.data[0]).not.toHaveProperty('createdAt');
     });
   });
 
@@ -305,7 +316,7 @@ describe('PaymentsService', () => {
     it('lista los pagos del ticket', async () => {
       ticketRepository.findOne.mockResolvedValue(baseTicket());
       paymentRepository.find.mockResolvedValue([
-        { idPayment: 'payment-1', amount: 5000 },
+        { idPayment: 'payment-1', amount: 5000, createdAt: new Date() },
       ]);
 
       const result = await service.findTicketPayments('ticket-1', 'user-1');
@@ -315,6 +326,7 @@ describe('PaymentsService', () => {
         order: { createdAt: 'DESC' },
       });
       expect(result.data).toHaveLength(1);
+      expect(result.data[0]).not.toHaveProperty('createdAt');
     });
   });
 });

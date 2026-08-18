@@ -30,7 +30,7 @@ export class BusinessesService {
     try {
       const saved = await this.businessRepository.save(business);
       return {
-        data: saved,
+        data: this.toBusinessResponse(saved),
         message: 'Negocio creado exitosamente',
       };
     } catch (error: unknown) {
@@ -49,7 +49,7 @@ export class BusinessesService {
     });
 
     return {
-      data: businesses,
+      data: businesses.map((business) => this.toBusinessResponse(business)),
       message: businesses.length
         ? undefined
         : 'No se encontraron negocios para este usuario',
@@ -63,7 +63,7 @@ export class BusinessesService {
     );
 
     return {
-      data: business,
+      data: this.toBusinessResponse(business),
       message: undefined,
     };
   }
@@ -77,17 +77,11 @@ export class BusinessesService {
     if (dto.nameBusiness !== undefined) {
       business.nameBusiness = dto.nameBusiness.trim();
     }
-    if (dto.businessType !== undefined) {
-      business.businessType = dto.businessType;
-    }
-    if (dto.statusBusiness !== undefined) {
-      business.statusBusiness = dto.statusBusiness;
-    }
 
     try {
       const saved = await this.businessRepository.save(business);
       return {
-        data: saved,
+        data: this.toBusinessResponse(saved),
         message: 'Negocio actualizado exitosamente',
       };
     } catch (error: unknown) {
@@ -109,8 +103,16 @@ export class BusinessesService {
     const saved = await this.businessRepository.save(business);
 
     return {
-      data: saved,
+      data: this.toBusinessResponse(saved),
       message: 'Negocio desactivado exitosamente',
+    };
+  }
+
+  private toBusinessResponse(business: Business) {
+    return {
+      idBusiness: business.idBusiness,
+      nameBusiness: business.nameBusiness,
+      businessType: business.businessType,
     };
   }
 }

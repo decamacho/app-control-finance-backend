@@ -34,6 +34,7 @@ import { BusinessesModule } from './modules/businesses/businesses.module';
         autoLoadEntities: true,
         synchronize: true, // only development
         logging: true,
+        timezone: 'America/Bogota',
       }),
     }),
     UsersModule,

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { ShiftType } from '../entities/parking-rate.entity';
 
 export interface ParkingPricingConfig {
@@ -17,7 +17,10 @@ const DEFAULT_CONFIG: ParkingPricingConfig = {
   graceMinutes: 15,
 };
 
-export type RateMap = Record<ShiftType, number>;
+export type RateMap = Record<
+  ShiftType.DAY | ShiftType.NIGHT | ShiftType.HOUR,
+  number
+>;
 
 interface Tramo {
   shiftType: ShiftType;
@@ -33,7 +36,9 @@ interface ShiftBounds {
 
 @Injectable()
 export class PricingService {
-  constructor(private readonly config: ParkingPricingConfig = DEFAULT_CONFIG) {}
+  constructor(
+    @Optional() private readonly config: ParkingPricingConfig = DEFAULT_CONFIG,
+  ) {}
 
   calculateTotal(entry: Date, exit: Date, rates: RateMap): number {
     if (exit.getTime() <= entry.getTime()) {

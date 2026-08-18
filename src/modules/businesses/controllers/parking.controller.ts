@@ -16,6 +16,7 @@ import { ParkingService } from '../services/parking.service';
 import { PaymentsService } from '../services/payments.service';
 import {
   ExitTicketDto,
+  MonthlyActivationDto,
   RegisterEntryDto,
   TicketQueryDto,
 } from '../dto/parking.dto';
@@ -48,6 +49,27 @@ export class ParkingController {
       exitTicketDto,
       user.idUser,
     );
+  }
+
+  @Post(':idTicket/monthly')
+  registerMonthly(
+    @Param('idTicket', ParseUUIDPipe) idTicket: string,
+    @Body() monthlyActivationDto: MonthlyActivationDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.parkingService.registerMonthly(
+      idTicket,
+      monthlyActivationDto,
+      user.idUser,
+    );
+  }
+
+  @Post(':idTicket/monthly/cancel')
+  cancelMonthly(
+    @Param('idTicket', ParseUUIDPipe) idTicket: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.parkingService.cancelMonthly(idTicket, user.idUser);
   }
 
   @Post(':idTicket/payments')
@@ -85,6 +107,14 @@ export class ParkingController {
     @CurrentUser() user: User,
   ) {
     return this.parkingService.findActiveByPlate(ticketQueryDto, user.idUser);
+  }
+
+  @Get('actives')
+  findActives(
+    @Query() ticketQueryDto: TicketQueryDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.parkingService.findActives(ticketQueryDto, user.idUser);
   }
 
   @Get()

@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { IdBusinessPipe } from '../../../common/pipes/id-business.pipe';
 import { User } from '../../users/entities/user.entity';
 import { ProductsService } from '../services/products.service';
 import { CreateProductDto, UpdateProductDto } from '../dto/food-sales.dto';
@@ -22,7 +23,7 @@ export class ProductsController {
 
   @Get()
   findAll(
-    @Param('idBusiness', ParseUUIDPipe) idBusiness: string,
+    @Param('idBusiness', IdBusinessPipe) idBusiness: string,
     @CurrentUser() user: User,
   ) {
     return this.productsService.findAll(idBusiness, user.idUser);
@@ -30,7 +31,7 @@ export class ProductsController {
 
   @Post()
   create(
-    @Param('idBusiness', ParseUUIDPipe) idBusiness: string,
+    @Param('idBusiness', IdBusinessPipe) idBusiness: string,
     @Body() createProductDto: CreateProductDto,
     @CurrentUser() user: User,
   ) {
@@ -43,7 +44,7 @@ export class ProductsController {
 
   @Patch(':idProduct')
   update(
-    @Param('idBusiness', ParseUUIDPipe) idBusiness: string,
+    @Param('idBusiness', IdBusinessPipe) idBusiness: string,
     @Param('idProduct', ParseUUIDPipe) idProduct: string,
     @Body() updateProductDto: UpdateProductDto,
     @CurrentUser() user: User,
@@ -58,7 +59,7 @@ export class ProductsController {
 
   @Delete(':idProduct')
   remove(
-    @Param('idBusiness', ParseUUIDPipe) idBusiness: string,
+    @Param('idBusiness', IdBusinessPipe) idBusiness: string,
     @Param('idProduct', ParseUUIDPipe) idProduct: string,
     @CurrentUser() user: User,
   ) {
