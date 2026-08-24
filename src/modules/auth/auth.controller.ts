@@ -13,6 +13,7 @@ import {
   HttpCode,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthService } from './services/auth/auth.service';
@@ -34,13 +35,23 @@ interface AuthenticatedRequest extends Request {
 @Controller('auth')
 @UseGuards(JwtAuthGuard)
 export class AuthController {
+  private readonly cookieSecure: boolean;
+
   constructor(
     private readonly authService: AuthService,
     private readonly jwtService: JwtService,
     private readonly refreshTokenService: RefreshTokenService,
     private readonly sessionService: SessionService,
     private readonly tokenBlacklistService: TokenBlacklistService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    const cookieSecureEnv = this.configService.get<string>('COOKIE_SECURE');
+    this.cookieSecure =
+      cookieSecureEnv !== undefined
+        ? cookieSecureEnv === 'true'
+        : this.configService.get<string>('NODE_ENV', 'development') ===
+          'production';
+  }
 
   @Public()
   @Throttle({ default: { limit: 3, ttl: 60000 } })
@@ -81,7 +92,7 @@ export class AuthController {
 
     res.cookie('refreshToken', result.refreshToken, {
       httpOnly: true,
-      secure: true,
+      secure: this.cookieSecure,
       sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/auth/refresh',

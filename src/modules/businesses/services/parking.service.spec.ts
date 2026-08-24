@@ -255,7 +255,7 @@ describe('ParkingService', () => {
 
       const result = await service.registerMonthly(
         'ticket-1',
-        { paymentMethod: 'NEQUI' },
+        { payments: [{ amount: 90000, paymentMethod: 'NEQUI' }] },
         'user-1',
       );
 
@@ -273,6 +273,54 @@ describe('ParkingService', () => {
         }),
       );
       expect(result.message).toBe('Mensualidad activada correctamente');
+    });
+
+    it('registra un pago por cada medio enviado en payments', async () => {
+      ticketRepository.findOne.mockResolvedValue(freshBaseTicket());
+      rateRepository.findOne.mockResolvedValue({ price: '90000' });
+
+      await service.registerMonthly(
+        'ticket-1',
+        {
+          payments: [
+            { amount: 60000, paymentMethod: 'NEQUI' },
+            { amount: 30000, paymentMethod: 'CASH' },
+          ],
+        },
+        'user-1',
+      );
+
+      expect(paymentRepository.create).toHaveBeenCalledTimes(2);
+      expect(paymentRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 60000,
+          paymentMethod: 'NEQUI',
+        }),
+      );
+      expect(paymentRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 30000,
+          paymentMethod: 'CASH',
+        }),
+      );
+    });
+
+    it('rechaza si la suma de pagos supera la tarifa mensual', async () => {
+      ticketRepository.findOne.mockResolvedValue(freshBaseTicket());
+      rateRepository.findOne.mockResolvedValue({ price: '90000' });
+
+      await expect(
+        service.registerMonthly(
+          'ticket-1',
+          {
+            payments: [
+              { amount: 60000, paymentMethod: 'NEQUI' },
+              { amount: 40000, paymentMethod: 'CASH' },
+            ],
+          },
+          'user-1',
+        ),
+      ).rejects.toThrow('El pago supera el valor de la mensualidad');
     });
 
     it('activa la mensualidad con pago en 0 si no se envia paymentMethod', async () => {
@@ -298,7 +346,7 @@ describe('ParkingService', () => {
       await expect(
         service.registerMonthly(
           'ticket-1',
-          { paymentMethod: 'CASH' },
+          { payments: [{ amount: 90000, paymentMethod: 'CASH' }] },
           'user-1',
         ),
       ).rejects.toThrow('No hay tarifa mensual configurada');
@@ -313,7 +361,7 @@ describe('ParkingService', () => {
       await expect(
         service.registerMonthly(
           'ticket-1',
-          { paymentMethod: 'CASH' },
+          { payments: [{ amount: 90000, paymentMethod: 'CASH' }] },
           'user-1',
         ),
       ).rejects.toThrow('Solo se puede activar la mensualidad');
@@ -437,6 +485,30 @@ describe('ParkingService', () => {
           'user-1',
         ),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('findOne', () => {
+    it('devuelve el ticket con pendingAmount', async () => {
+      ticketRepository.findOne.mockResolvedValue(freshBaseTicket());
+
+      const result = await service.findOne('ticket-1', 'user-1');
+
+      expect(ticketRepository.findOne).toHaveBeenCalledWith({
+        where: { idTicket: 'ticket-1' },
+        relations: { business: true, vehicle: true },
+      });
+      expect(result.data.idTicket).toBe('ticket-1');
+      expect(result.data.pendingAmount).toBe(0);
+      expect(result.message).toBeUndefined();
+    });
+
+    it('lanza 404 si el ticket no existe', async () => {
+      ticketRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.findOne('ticket-1', 'user-1')).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

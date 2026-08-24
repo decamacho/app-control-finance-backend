@@ -1,13 +1,14 @@
 import { PartialType } from '@nestjs/mapped-types';
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
+  IsArray,
   IsDate,
+  IsDefined,
   IsEmail,
   IsEnum,
   IsNotEmpty,
-  IsNotEmptyObject,
   IsNumber,
-  IsObject,
   IsOptional,
   IsPositive,
   IsString,
@@ -19,7 +20,7 @@ import {
 import { VehicleType } from '../entities/vehicle.entity';
 import { ShiftType } from '../entities/parking-rate.entity';
 import { TicketStatus } from '../entities/parking-ticket.entity';
-import { PaymentMethod } from '../types/payment.enum';
+import { RegisterPaymentItemDto } from './payment.dto';
 
 export class RegisterEntryDto {
   @IsUUID('4', { message: 'Negocio no encontrado' })
@@ -61,11 +62,20 @@ export class RatePricesDto {
 }
 
 export class UpsertRatesDto {
-  @IsObject({ message: 'rates debe ser un objeto' })
-  @IsNotEmptyObject({ nullable: false })
+  @IsDefined({ message: 'MOTO es obligatorio' })
   @ValidateNested()
   @Type(() => RatePricesDto)
-  rates!: Record<VehicleType, RatePricesDto>;
+  MOTO!: RatePricesDto;
+
+  @IsDefined({ message: 'CARRO es obligatorio' })
+  @ValidateNested()
+  @Type(() => RatePricesDto)
+  CARRO!: RatePricesDto;
+
+  @IsDefined({ message: 'CAMIONETA es obligatorio' })
+  @ValidateNested()
+  @Type(() => RatePricesDto)
+  CAMIONETA!: RatePricesDto;
 }
 
 export class UpdateRateDto {
@@ -145,10 +155,11 @@ export class VehicleQueryDto {
 
 export class MonthlyActivationDto {
   @IsOptional()
-  @IsEnum(PaymentMethod, {
-    message: `paymentMethod debe ser uno de: ${Object.values(PaymentMethod).join(', ')}`,
-  })
-  paymentMethod?: PaymentMethod;
+  @IsArray({ message: 'payments debe ser un arreglo' })
+  @ArrayMinSize(1, { message: 'payments debe contener al menos un pago' })
+  @ValidateNested({ each: true })
+  @Type(() => RegisterPaymentItemDto)
+  payments?: RegisterPaymentItemDto[];
 
   @IsOptional()
   @Type(() => Date)

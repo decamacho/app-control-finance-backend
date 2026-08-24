@@ -45,22 +45,22 @@ export class ParkingRatesService {
   async upsert(idBusiness: string, dto: UpsertRatesDto, idUser: string) {
     const business = await this.assertParkingBusiness(idBusiness, idUser);
 
-    const providedTypes = Object.keys(dto.rates) as VehicleType[];
+    const providedTypes = Object.keys(dto) as VehicleType[];
     const unknownTypes = providedTypes.filter(
       (type) => !Object.values(VehicleType).includes(type),
     );
     if (unknownTypes.length > 0) {
       throw new BadRequestException(
-        `rates contiene tipos de vehiculo no validos: ${unknownTypes.join(', ')}`,
+        `Tipos de vehiculo no validos: ${unknownTypes.join(', ')}`,
       );
     }
 
     const missingTypes = Object.values(VehicleType).filter(
-      (type) => !dto.rates[type],
+      (type) => !dto[type],
     );
     if (missingTypes.length > 0) {
       throw new BadRequestException(
-        `rates debe incluir todos los tipos de vehiculo (faltan: ${missingTypes.join(', ')})`,
+        `El body debe incluir todos los tipos de vehiculo (faltan: ${missingTypes.join(', ')})`,
       );
     }
 
@@ -77,16 +77,12 @@ export class ParkingRatesService {
         const found = existingMap.get(key);
         if (found) {
           found.price =
-            dto.rates[vehicleType][
-              shiftType as keyof UpsertRatesDto['rates'][VehicleType]
-            ];
+            dto[vehicleType][shiftType as keyof UpsertRatesDto[VehicleType]];
           return found;
         }
         return this.rateRepository.create({
           price:
-            dto.rates[vehicleType][
-              shiftType as keyof UpsertRatesDto['rates'][VehicleType]
-            ],
+            dto[vehicleType][shiftType as keyof UpsertRatesDto[VehicleType]],
           vehicleType,
           shiftType,
           business: { idBusiness: business.idBusiness },

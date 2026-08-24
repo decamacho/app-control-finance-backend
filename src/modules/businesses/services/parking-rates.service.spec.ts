@@ -17,11 +17,9 @@ describe('ParkingRatesService', () => {
   let validator: Record<string, jest.Mock>;
 
   const ratesDto = () => ({
-    rates: {
-      MOTO: { DAY: 5000, NIGHT: 5000, HOUR: 1000, MONTHLY: 70000 },
-      CARRO: { DAY: 6000, NIGHT: 6000, HOUR: 2000, MONTHLY: 90000 },
-      CAMIONETA: { DAY: 8000, NIGHT: 9000, HOUR: 3000, MONTHLY: 110000 },
-    },
+    MOTO: { DAY: 5000, NIGHT: 5000, HOUR: 1000, MONTHLY: 70000 },
+    CARRO: { DAY: 6000, NIGHT: 6000, HOUR: 2000, MONTHLY: 90000 },
+    CAMIONETA: { DAY: 8000, NIGHT: 9000, HOUR: 3000, MONTHLY: 110000 },
   });
 
   beforeEach(async () => {
@@ -138,11 +136,7 @@ describe('ParkingRatesService', () => {
 
     it('rechaza el body si falta algun tipo de vehiculo', async () => {
       await expect(
-        service.upsert(
-          'business-1',
-          { rates: { MOTO: ratesDto().rates.MOTO } },
-          'user-1',
-        ),
+        service.upsert('business-1', { MOTO: ratesDto().MOTO }, 'user-1'),
       ).rejects.toThrow('faltan: CARRO, CAMIONETA');
     });
 
@@ -151,14 +145,12 @@ describe('ParkingRatesService', () => {
         service.upsert(
           'business-1',
           {
-            rates: {
-              ...ratesDto().rates,
-              BICICLETA: {
-                DAY: 1000,
-                NIGHT: 1000,
-                HOUR: 500,
-                MONTHLY: 20000,
-              },
+            ...ratesDto(),
+            BICICLETA: {
+              DAY: 1000,
+              NIGHT: 1000,
+              HOUR: 500,
+              MONTHLY: 20000,
             },
           },
           'user-1',

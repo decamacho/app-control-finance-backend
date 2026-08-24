@@ -117,6 +117,14 @@ export class ParkingController {
     return this.parkingService.findActives(ticketQueryDto, user.idUser);
   }
 
+  @Get(':idTicket')
+  findOne(
+    @Param('idTicket', ParseUUIDPipe) idTicket: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.parkingService.findOne(idTicket, user.idUser);
+  }
+
   @Get()
   findAll(@Query() ticketQueryDto: TicketQueryDto, @CurrentUser() user: User) {
     return this.parkingService.findAll(ticketQueryDto, user.idUser);

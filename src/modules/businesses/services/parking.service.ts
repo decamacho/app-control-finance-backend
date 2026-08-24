@@ -18,7 +18,7 @@ import {
 } from '../dto/parking.dto';
 import { BusinessValidatorService } from './business-validator.service';
 import { PricingService, RateMap } from './pricing.service';
-import { PaymentStatus } from '../types/payment.enum';
+import { PaymentStatus, PaymentMethod } from '../types/payment.enum';
 import { normalizePlate, validatePlateFormat } from '../utils/plate.util';
 
 @Injectable()
@@ -142,18 +142,37 @@ export class ParkingService {
     vehicle.monthlyEndDate = null;
     await this.vehicleRepository.save(vehicle);
 
-    const payment = this.paymentRepository.create({
-      amount: dto.paymentMethod ? Number(monthlyRate.price) : 0,
-      paymentMethod: dto.paymentMethod ?? null,
-      ticket: { idTicket },
-    });
-    const savedPayment = await this.paymentRepository.save(payment);
+    const monthlyPrice = Number(monthlyRate.price);
+
+    if (dto.payments) {
+      const totalPaid = dto.payments.reduce(
+        (sum, payment) => sum + payment.amount,
+        0,
+      );
+      if (totalPaid > monthlyPrice) {
+        throw new BadRequestException(
+          'El pago supera el valor de la mensualidad',
+        );
+      }
+    }
+
+    const payments: { amount: number; paymentMethod: PaymentMethod | null }[] =
+      dto.payments ?? [{ amount: 0, paymentMethod: null }];
+    const savedPayments = await this.paymentRepository.save(
+      payments.map((payment) =>
+        this.paymentRepository.create({
+          amount: payment.amount,
+          paymentMethod: payment.paymentMethod,
+          ticket: { idTicket },
+        }),
+      ),
+    );
 
     return {
       data: {
-        payment: savedPayment,
+        payments: savedPayments,
         vehicle,
-        monthlyPrice: Number(monthlyRate.price),
+        monthlyPrice,
       },
       message: 'Mensualidad activada correctamente',
     };
@@ -263,6 +282,15 @@ export class ParkingService {
 
     return {
       data: ticket,
+      message: undefined,
+    };
+  }
+
+  async findOne(idTicket: string, idUser: string) {
+    const ticket = await this.findOwnedTicket(idTicket, idUser);
+
+    return {
+      data: this.withPendingAmount([ticket])[0],
       message: undefined,
     };
   }
