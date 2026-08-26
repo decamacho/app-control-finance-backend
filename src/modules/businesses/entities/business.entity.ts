@@ -11,10 +11,10 @@ import {
 import { User } from '../../users/entities/user.entity';
 import { Vehicle } from './vehicle.entity';
 import { ParkingRate } from './parking-rate.entity';
-import { ParkingTicket } from './parking-ticket.entity';
 import { BusinessCustomer } from './business-customer.entity';
 import { BusinessProduct } from './business-product.entity';
 import { BusinessOrder } from './business-order.entity';
+import { RecurringOrder } from './recurring-order.entity';
 
 export enum BusinessType {
   PARKING = 'PARKING',
@@ -53,15 +53,15 @@ export class Business {
   @OneToMany(() => ParkingRate, (rate) => rate.business)
   parkingRates!: ParkingRate[];
 
-  @OneToMany(() => ParkingTicket, (ticket) => ticket.business)
-  parkingTickets!: ParkingTicket[];
-
   @OneToMany(() => BusinessCustomer, (customer) => customer.business)
   customers!: BusinessCustomer[];
 
   @OneToMany(() => BusinessProduct, (product) => product.business)
   products!: BusinessProduct[];
 
-  @OneToMany(() => BusinessOrder, (order) => order.business)
+  @OneToMany(() => BusinessOrder, (order) => order.customer)
   orders!: BusinessOrder[];
+
+  @OneToMany(() => RecurringOrder, (ro) => ro.customer)
+  recurringOrders!: RecurringOrder[];
 }

@@ -72,6 +72,14 @@ export class ParkingController {
     return this.parkingService.cancelMonthly(idTicket, user.idUser);
   }
 
+  @Get(':idTicket/monthly-status')
+  monthlyStatus(
+    @Param('idTicket', ParseUUIDPipe) idTicket: string,
+    @CurrentUser() user: User,
+  ) {
+    return this.parkingService.getMonthlyStatus(idTicket, user.idUser);
+  }
+
   @Post(':idTicket/payments')
   registerPayment(
     @Param('idTicket', ParseUUIDPipe) idTicket: string,

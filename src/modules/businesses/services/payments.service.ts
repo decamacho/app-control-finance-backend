@@ -33,10 +33,13 @@ export class PaymentsService {
     const order = await this.findOrder(idOrder);
 
     await this.validator.assertBusinessOwnership(
-      order.business.idBusiness,
+      order.customer.business.idBusiness,
       idUser,
     );
-    this.validator.assertBusinessType(order.business, BusinessType.FOOD_SALE);
+    this.validator.assertBusinessType(
+      order.customer.business,
+      BusinessType.FOOD_SALE,
+    );
 
     if (order.statusOrder !== OrderStatus.ACTIVE) {
       throw new BadRequestException(
@@ -94,10 +97,13 @@ export class PaymentsService {
     const ticket = await this.findTicket(idTicket);
 
     await this.validator.assertBusinessOwnership(
-      ticket.business.idBusiness,
+      ticket.vehicle.business.idBusiness,
       idUser,
     );
-    this.validator.assertBusinessType(ticket.business, BusinessType.PARKING);
+    this.validator.assertBusinessType(
+      ticket.vehicle.business,
+      BusinessType.PARKING,
+    );
 
     if (ticket.statusTicket !== TicketStatus.COMPLETED) {
       throw new BadRequestException(
@@ -151,7 +157,7 @@ export class PaymentsService {
     const order = await this.findOrder(idOrder);
 
     await this.validator.assertBusinessOwnership(
-      order.business.idBusiness,
+      order.customer.business.idBusiness,
       idUser,
     );
 
@@ -172,7 +178,7 @@ export class PaymentsService {
     const ticket = await this.findTicket(idTicket);
 
     await this.validator.assertBusinessOwnership(
-      ticket.business.idBusiness,
+      ticket.vehicle.business.idBusiness,
       idUser,
     );
 
@@ -204,7 +210,7 @@ export class PaymentsService {
   private async findOrder(idOrder: string): Promise<BusinessOrder> {
     const order = await this.orderRepository.findOne({
       where: { idOrder },
-      relations: { business: true },
+      relations: { customer: { business: true } },
     });
 
     if (!order) {
@@ -217,7 +223,7 @@ export class PaymentsService {
   private async findTicket(idTicket: string): Promise<ParkingTicket> {
     const ticket = await this.ticketRepository.findOne({
       where: { idTicket },
-      relations: { business: true },
+      relations: { vehicle: { business: true } },
     });
 
     if (!ticket) {

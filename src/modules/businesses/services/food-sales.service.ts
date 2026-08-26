@@ -13,6 +13,7 @@ import { BusinessProduct } from '../entities/business-product.entity';
 import { CreateOrderDto, OrderQueryDto } from '../dto/food-sales.dto';
 import { PaymentStatus } from '../types/payment.enum';
 import { BusinessValidatorService } from './business-validator.service';
+import { CustomerProductPriceService } from './customer-product-price.service';
 
 @Injectable()
 export class FoodSalesService {
@@ -26,6 +27,7 @@ export class FoodSalesService {
     @InjectRepository(BusinessProduct)
     private readonly productRepository: Repository<BusinessProduct>,
     private readonly validator: BusinessValidatorService,
+    private readonly customerProductPriceService: CustomerProductPriceService,
   ) {}
 
   async createOrder(dto: CreateOrderDto, idUser: string) {
@@ -59,10 +61,15 @@ export class FoodSalesService {
         );
       }
 
+      const basePrice = itemDto.unitPrice ?? Number(product.basePrice);
       const unitPrice =
         itemDto.unitPrice !== undefined
           ? itemDto.unitPrice
-          : Number(product.basePrice);
+          : await this.customerProductPriceService.getPrice(
+              customer.idCustomer,
+              product.idProduct,
+              Number(product.basePrice),
+            );
       const subtotal = Math.round(unitPrice * itemDto.quantity * 100) / 100;
       totalAmount = Math.round((totalAmount + subtotal) * 100) / 100;
 
@@ -82,7 +89,6 @@ export class FoodSalesService {
       paidAmount: 0,
       paymentStatus: PaymentStatus.PENDING,
       statusOrder: OrderStatus.ACTIVE,
-      business: { idBusiness: business.idBusiness },
       customer: { idCustomer: customer.idCustomer },
       items,
     });
@@ -100,7 +106,7 @@ export class FoodSalesService {
 
     const orders = await this.orderRepository.find({
       where: {
-        business: { idBusiness: query.idBusiness },
+        customer: { business: { idBusiness: query.idBusiness } },
         statusOrder: query.status,
         paymentStatus: query.paymentStatus,
       },
@@ -145,7 +151,10 @@ export class FoodSalesService {
   ): Promise<BusinessOrder> {
     const order = await this.orderRepository.findOne({
       where: { idOrder },
-      relations: { business: true, customer: true, items: { product: true } },
+      relations: {
+        customer: { business: true },
+        items: { product: true },
+      },
     });
 
     if (!order) {
@@ -153,7 +162,7 @@ export class FoodSalesService {
     }
 
     await this.validator.assertBusinessOwnership(
-      order.business.idBusiness,
+      order.customer.business.idBusiness,
       idUser,
     );
 

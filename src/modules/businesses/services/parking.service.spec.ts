@@ -4,6 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ParkingService } from './parking.service';
 import { BusinessValidatorService } from './business-validator.service';
 import { PricingService } from './pricing.service';
+import { MonthlyBillingService } from './monthly-billing.service';
 import { Vehicle, VehicleType } from '../entities/vehicle.entity';
 import { ParkingTicket, TicketStatus } from '../entities/parking-ticket.entity';
 import { ParkingRate, ShiftType } from '../entities/parking-rate.entity';
@@ -19,6 +20,7 @@ describe('ParkingService', () => {
   let paymentRepository: Record<string, jest.Mock>;
   let validator: Record<string, jest.Mock>;
   let pricingService: Record<string, jest.Mock>;
+  let monthlyBillingService: Record<string, jest.Mock>;
 
   const freshBaseTicket = () => ({
     idTicket: 'ticket-1',
@@ -26,8 +28,11 @@ describe('ParkingService', () => {
     exitTime: null,
     totalAmount: null,
     statusTicket: TicketStatus.ACTIVE,
-    business: { idBusiness: 'business-1' },
-    vehicle: { idVehicle: 'vehicle-1', vehicleType: VehicleType.MOTO },
+    vehicle: {
+      idVehicle: 'vehicle-1',
+      vehicleType: VehicleType.MOTO,
+      business: { idBusiness: 'business-1' },
+    },
   });
 
   const fullRates = () => [
@@ -72,6 +77,17 @@ describe('ParkingService', () => {
     pricingService = {
       calculateTotal: jest.fn().mockReturnValue(9000),
     };
+    monthlyBillingService = {
+      getStatus: jest.fn().mockResolvedValue({
+        subscription: null,
+        monthlyPrice: null,
+      }),
+      activate: jest.fn().mockResolvedValue({
+        subscription: { idSubscription: 'sub-1', status: 'ACTIVE' },
+        monthlyPrice: 90000,
+      }),
+      cancel: jest.fn().mockResolvedValue({ recalculatedTickets: 0 }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -85,6 +101,7 @@ describe('ParkingService', () => {
         { provide: getRepositoryToken(Payment), useValue: paymentRepository },
         { provide: BusinessValidatorService, useValue: validator },
         { provide: PricingService, useValue: pricingService },
+        { provide: MonthlyBillingService, useValue: monthlyBillingService },
       ],
     }).compile();
 
@@ -104,6 +121,7 @@ describe('ParkingService', () => {
     const registeredVehicle = () => ({
       idVehicle: 'vehicle-1',
       vehicleType: VehicleType.MOTO,
+      business: { idBusiness: 'business-1' },
     });
 
     it('registra el ticket de entrada con placa normalizada', async () => {
@@ -122,7 +140,6 @@ describe('ParkingService', () => {
       expect(ticketRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
           statusTicket: TicketStatus.ACTIVE,
-          business: { idBusiness: 'business-1' },
           vehicle: { idVehicle: 'vehicle-1' },
         }),
       );
@@ -163,10 +180,10 @@ describe('ParkingService', () => {
     });
 
     it('rechaza la entrada si el vehiculo tiene mensualidad activa', async () => {
-      vehicleRepository.findOne.mockResolvedValue({
-        ...registeredVehicle(),
-        monthlyStartDate: new Date(2026, 0, 1),
-        monthlyEndDate: null,
+      vehicleRepository.findOne.mockResolvedValue(registeredVehicle());
+      monthlyBillingService.getStatus.mockResolvedValue({
+        subscription: { idSubscription: 'sub-1', status: 'ACTIVE' },
+        monthlyPrice: 90000,
       });
 
       await expect(service.registerEntry(dto, 'user-1')).rejects.toThrow(
@@ -200,9 +217,12 @@ describe('ParkingService', () => {
         vehicle: {
           idVehicle: 'vehicle-1',
           vehicleType: VehicleType.MOTO,
-          monthlyStartDate: new Date(2025, 11, 1),
-          monthlyEndDate: null,
+          business: { idBusiness: 'business-1' },
         },
+      });
+      monthlyBillingService.getStatus.mockResolvedValue({
+        subscription: { idSubscription: 'sub-1', status: 'ACTIVE' },
+        monthlyPrice: 90000,
       });
 
       await expect(
@@ -249,9 +269,8 @@ describe('ParkingService', () => {
   });
 
   describe('mensualidad', () => {
-    it('activa la mensualidad registrando el pago y la fecha de inicio', async () => {
+    it('activa la mensualidad delegando al MonthlyBillingService', async () => {
       ticketRepository.findOne.mockResolvedValue(freshBaseTicket());
-      rateRepository.findOne.mockResolvedValue({ price: '90000' });
 
       const result = await service.registerMonthly(
         'ticket-1',
@@ -259,11 +278,9 @@ describe('ParkingService', () => {
         'user-1',
       );
 
-      expect(vehicleRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          monthlyStartDate: expect.any(Date) as Date,
-          monthlyEndDate: null,
-        }),
+      expect(monthlyBillingService.activate).toHaveBeenCalledWith(
+        'vehicle-1',
+        undefined,
       );
       expect(paymentRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -275,39 +292,8 @@ describe('ParkingService', () => {
       expect(result.message).toBe('Mensualidad activada correctamente');
     });
 
-    it('registra un pago por cada medio enviado en payments', async () => {
-      ticketRepository.findOne.mockResolvedValue(freshBaseTicket());
-      rateRepository.findOne.mockResolvedValue({ price: '90000' });
-
-      await service.registerMonthly(
-        'ticket-1',
-        {
-          payments: [
-            { amount: 60000, paymentMethod: 'NEQUI' },
-            { amount: 30000, paymentMethod: 'CASH' },
-          ],
-        },
-        'user-1',
-      );
-
-      expect(paymentRepository.create).toHaveBeenCalledTimes(2);
-      expect(paymentRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          amount: 60000,
-          paymentMethod: 'NEQUI',
-        }),
-      );
-      expect(paymentRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          amount: 30000,
-          paymentMethod: 'CASH',
-        }),
-      );
-    });
-
     it('rechaza si la suma de pagos supera la tarifa mensual', async () => {
       ticketRepository.findOne.mockResolvedValue(freshBaseTicket());
-      rateRepository.findOne.mockResolvedValue({ price: '90000' });
 
       await expect(
         service.registerMonthly(
@@ -323,9 +309,8 @@ describe('ParkingService', () => {
       ).rejects.toThrow('El pago supera el valor de la mensualidad');
     });
 
-    it('activa la mensualidad con pago en 0 si no se envia paymentMethod', async () => {
+    it('activa la mensualidad con pago en 0 si no se envia payments', async () => {
       ticketRepository.findOne.mockResolvedValue(freshBaseTicket());
-      rateRepository.findOne.mockResolvedValue({ price: '90000' });
 
       const result = await service.registerMonthly('ticket-1', {}, 'user-1');
 
@@ -337,19 +322,6 @@ describe('ParkingService', () => {
         }),
       );
       expect(result.message).toBe('Mensualidad activada correctamente');
-    });
-
-    it('rechaza activar mensualidad sin tarifa mensual configurada', async () => {
-      ticketRepository.findOne.mockResolvedValue(freshBaseTicket());
-      rateRepository.findOne.mockResolvedValue(null);
-
-      await expect(
-        service.registerMonthly(
-          'ticket-1',
-          { payments: [{ amount: 90000, paymentMethod: 'CASH' }] },
-          'user-1',
-        ),
-      ).rejects.toThrow('No hay tarifa mensual configurada');
     });
 
     it('rechaza activar mensualidad sobre un ticket no activo', async () => {
@@ -367,50 +339,14 @@ describe('ParkingService', () => {
       ).rejects.toThrow('Solo se puede activar la mensualidad');
     });
 
-    it('cancela la mensualidad y recalcula los dias dentro del mes', async () => {
-      ticketRepository.findOne.mockResolvedValue({
-        ...freshBaseTicket(),
-        vehicle: {
-          idVehicle: 'vehicle-1',
-          vehicleType: VehicleType.MOTO,
-          monthlyStartDate: new Date(2025, 11, 1),
-          monthlyEndDate: null,
-        },
-      });
-      ticketRepository.find.mockResolvedValue([
-        {
-          idTicket: 'ticket-9',
-          entryTime: new Date(2025, 11, 2, 10, 0, 0, 0),
-          exitTime: new Date(2025, 11, 2, 12, 0, 0, 0),
-          totalAmount: '0',
-          paidAmount: '0',
-          statusTicket: TicketStatus.COMPLETED,
-          business: { idBusiness: 'business-1' },
-        },
-      ]);
-      rateRepository.find.mockResolvedValue(fullRates());
+    it('cancela la mensualidad delegando al MonthlyBillingService', async () => {
+      ticketRepository.findOne.mockResolvedValue(freshBaseTicket());
 
       const result = await service.cancelMonthly('ticket-1', 'user-1');
 
-      expect(ticketRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          totalAmount: 9000,
-          paymentStatus: PaymentStatus.PENDING,
-        }),
-      );
-      expect(result.data.recalculatedTickets).toBe(1);
+      expect(monthlyBillingService.cancel).toHaveBeenCalledWith('vehicle-1');
+      expect(result.data.recalculatedTickets).toBe(0);
       expect(result.message).toBe('Mensualidad cancelada y dias liquidados');
-    });
-
-    it('rechaza cancelar si el vehiculo no tiene mensualidad', async () => {
-      ticketRepository.findOne.mockResolvedValue({
-        ...freshBaseTicket(),
-        vehicle: { idVehicle: 'vehicle-1', vehicleType: VehicleType.MOTO },
-      });
-
-      await expect(service.cancelMonthly('ticket-1', 'user-1')).rejects.toThrow(
-        'no tiene mensualidad activa',
-      );
     });
   });
 
@@ -496,7 +432,7 @@ describe('ParkingService', () => {
 
       expect(ticketRepository.findOne).toHaveBeenCalledWith({
         where: { idTicket: 'ticket-1' },
-        relations: { business: true, vehicle: true },
+        relations: { vehicle: { business: true } },
       });
       expect(result.data.idTicket).toBe('ticket-1');
       expect(result.data.pendingAmount).toBe(0);
@@ -523,7 +459,7 @@ describe('ParkingService', () => {
 
       expect(ticketRepository.find).toHaveBeenCalledWith({
         where: {
-          business: { idBusiness: 'business-1' },
+          vehicle: { business: { idBusiness: 'business-1' } },
           statusTicket: TicketStatus.ACTIVE,
         },
         relations: { vehicle: true },
@@ -544,7 +480,7 @@ describe('ParkingService', () => {
 
       expect(ticketRepository.find).toHaveBeenCalledWith({
         where: {
-          business: { idBusiness: 'business-1' },
+          vehicle: { business: { idBusiness: 'business-1' } },
           statusTicket: TicketStatus.ACTIVE,
         },
         relations: { vehicle: true },

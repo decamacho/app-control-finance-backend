@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { UnauthorizedException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '../jwt/jwt.service';
@@ -94,7 +94,7 @@ describe('RefreshTokenService', () => {
   });
 
   describe('refresh', () => {
-    it('should return new token pair for valid refresh token', async () => {
+    it('should invalidate old session and create new one', async () => {
       const mockPayload: RefreshPayload = {
         sub: 'user-uuid',
         sessionId: 'session-uuid',
@@ -103,17 +103,35 @@ describe('RefreshTokenService', () => {
       jwtService.verifyRefreshToken.mockReturnValue(mockPayload);
       userRepository.findOne.mockResolvedValue(mockUser);
       sessionService.validateRefreshToken.mockResolvedValue(mockSession);
+      sessionService.generateSessionId.mockReturnValue('new-session-uuid');
       jwtService.generateTokenPair.mockReturnValue({
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token',
       });
+      sessionService.create.mockResolvedValue({ idSession: 'new-session-uuid' });
 
-      const result = await service.refresh('valid-refresh-token');
+      const result = await service.refresh(
+        'valid-refresh-token',
+        'Firefox on Windows',
+        '127.0.0.1',
+      );
 
       expect(result).toEqual({
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token',
       });
+      expect(sessionService.invalidateSession).toHaveBeenCalledWith(
+        'session-uuid',
+        'user-uuid',
+      );
+      expect(sessionService.create).toHaveBeenCalledWith(
+        {
+          idUser: 'user-uuid',
+          deviceInfo: 'Firefox on Windows',
+          ipAddress: '127.0.0.1',
+        },
+        'new-refresh-token',
+      );
     });
 
     it('should throw UnauthorizedException when user not found', async () => {
@@ -124,70 +142,25 @@ describe('RefreshTokenService', () => {
       });
       userRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.refresh('token')).rejects.toThrow(
-        UnauthorizedException,
-      );
+      await expect(
+        service.refresh('token', 'device', 'ip'),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
-    it('should throw ForbiddenException when session is inactive', async () => {
+    it('should throw when session validation fails', async () => {
       jwtService.verifyRefreshToken.mockReturnValue({
         sub: 'user-uuid',
         sessionId: 'session-uuid',
         type: 'refresh',
       });
       userRepository.findOne.mockResolvedValue(mockUser);
-      sessionService.validateRefreshToken.mockResolvedValue({
-        ...mockSession,
-        isActive: false,
-      });
-
-      await expect(service.refresh('token')).rejects.toThrow(
-        ForbiddenException,
+      sessionService.validateRefreshToken.mockRejectedValue(
+        new Error('Session not found'),
       );
-    });
-  });
-
-  describe('rotateRefreshToken', () => {
-    it('should rotate refresh token and create new session', async () => {
-      jwtService.verifyRefreshToken.mockReturnValue({
-        sub: 'user-uuid',
-        sessionId: 'session-uuid',
-        type: 'refresh',
-      });
-      userRepository.findOne.mockResolvedValue(mockUser);
-      sessionService.validateRefreshToken.mockResolvedValue(mockSession);
-      sessionService.generateSessionId.mockReturnValue('new-session-uuid');
-      jwtService.generateTokenPair.mockReturnValue({
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-      });
-      sessionService.create.mockResolvedValue(mockSession);
-
-      const result = await service.rotateRefreshToken(
-        'old-refresh-token',
-        mockUser,
-        'Firefox on Linux',
-        '10.0.0.1',
-      );
-
-      expect(result).toEqual({
-        accessToken: 'new-access-token',
-        refreshToken: 'new-refresh-token',
-      });
-      expect(sessionService.invalidateSession).toHaveBeenCalled();
-      expect(sessionService.create).toHaveBeenCalled();
-    });
-
-    it('should throw UnauthorizedException when user id mismatch', async () => {
-      jwtService.verifyRefreshToken.mockReturnValue({
-        sub: 'different-user',
-        sessionId: 'session-uuid',
-        type: 'refresh',
-      });
 
       await expect(
-        service.rotateRefreshToken('token', mockUser, 'device', 'ip'),
-      ).rejects.toThrow(UnauthorizedException);
+        service.refresh('token', 'device', 'ip'),
+      ).rejects.toThrow();
     });
   });
 });

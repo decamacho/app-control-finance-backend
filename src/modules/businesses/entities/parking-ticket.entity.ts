@@ -6,11 +6,9 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Business } from './business.entity';
 import { Vehicle } from './vehicle.entity';
 import { Payment } from './payment.entity';
 import { PaymentStatus } from '../types/payment.enum';
-import { Transaction } from '../../transactions/entities/transaction.entity';
 
 export enum TicketStatus {
   ACTIVE = 'ACTIVE',
@@ -41,12 +39,6 @@ export class ParkingTicket {
   @Column({ type: 'enum', enum: TicketStatus, default: TicketStatus.ACTIVE })
   statusTicket!: TicketStatus;
 
-  @ManyToOne(() => Business, (business) => business.parkingTickets, {
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'idBusiness' })
-  business!: Business;
-
   @ManyToOne(() => Vehicle, (vehicle) => vehicle.tickets, {
     onDelete: 'RESTRICT',
   })
@@ -55,9 +47,4 @@ export class ParkingTicket {
 
   @OneToMany(() => Payment, (payment) => payment.ticket)
   payments!: Payment[];
-
-  // Relación financiera futura: NO se escribe en v1.
-  @ManyToOne(() => Transaction, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'idTransaction' })
-  transaction!: Transaction | null;
 }

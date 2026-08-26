@@ -113,7 +113,15 @@ export class AuthController {
       throw new UnauthorizedException('Refresh token not found');
     }
 
-    return this.refreshTokenService.refresh(refreshToken);
+    const deviceInfo = (req.headers['user-agent'] as string) ?? 'unknown';
+    const ipAddress =
+      (req.ip as string) ?? req.socket.remoteAddress ?? 'unknown';
+
+    return this.refreshTokenService.refresh(
+      refreshToken,
+      deviceInfo,
+      ipAddress,
+    );
   }
 
   @Public()

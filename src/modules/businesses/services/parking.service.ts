@@ -18,6 +18,7 @@ import {
 } from '../dto/parking.dto';
 import { BusinessValidatorService } from './business-validator.service';
 import { PricingService, RateMap } from './pricing.service';
+import { MonthlyBillingService } from './monthly-billing.service';
 import { PaymentStatus, PaymentMethod } from '../types/payment.enum';
 import { normalizePlate, validatePlateFormat } from '../utils/plate.util';
 
@@ -34,11 +35,13 @@ export class ParkingService {
     private readonly paymentRepository: Repository<Payment>,
     private readonly validator: BusinessValidatorService,
     private readonly pricingService: PricingService,
+    private readonly monthlyBillingService: MonthlyBillingService,
   ) {}
 
   async registerEntry(dto: RegisterEntryDto, idUser: string) {
     const business = await this.assertParkingBusiness(dto.idBusiness, idUser);
     const licensePlate = normalizePlate(dto.licensePlate);
+    const entryTime = dto.customTime ?? new Date();
 
     const vehicle = await this.vehicleRepository.findOne({
       where: { business: { idBusiness: business.idBusiness }, licensePlate },
@@ -50,7 +53,11 @@ export class ParkingService {
 
     validatePlateFormat(licensePlate, vehicle.vehicleType);
 
-    if (this.hasActiveMonthly(vehicle)) {
+    const { subscription } = await this.monthlyBillingService.getStatus(
+      vehicle.idVehicle,
+    );
+
+    if (subscription) {
       throw new BadRequestException(
         'El vehiculo tiene una mensualidad activa; debe cancelarla',
       );
@@ -70,9 +77,8 @@ export class ParkingService {
     }
 
     const ticket = this.ticketRepository.create({
-      entryTime: new Date(),
+      entryTime,
       statusTicket: TicketStatus.ACTIVE,
-      business: { idBusiness: business.idBusiness },
       vehicle: { idVehicle: vehicle.idVehicle },
     });
 
@@ -87,7 +93,11 @@ export class ParkingService {
   async completeExit(idTicket: string, dto: ExitTicketDto, idUser: string) {
     const ticket = await this.findOwnedTicket(idTicket, idUser);
 
-    if (this.hasActiveMonthly(ticket.vehicle)) {
+    const { subscription } = await this.monthlyBillingService.getStatus(
+      ticket.vehicle.idVehicle,
+    );
+
+    if (subscription) {
       throw new BadRequestException(
         'El vehiculo tiene una mensualidad activa; debe cancelarla',
       );
@@ -123,28 +133,13 @@ export class ParkingService {
       );
     }
 
-    const monthlyRate = await this.rateRepository.findOne({
-      where: {
-        business: { idBusiness: ticket.business.idBusiness },
-        vehicleType: ticket.vehicle.vehicleType,
-        shiftType: ShiftType.MONTHLY,
-      },
-    });
-
-    if (!monthlyRate) {
-      throw new BadRequestException(
-        'No hay tarifa mensual configurada para este tipo de vehiculo',
+    const { subscription, monthlyPrice } =
+      await this.monthlyBillingService.activate(
+        ticket.vehicle.idVehicle,
+        dto.startDate,
       );
-    }
 
-    const vehicle = ticket.vehicle;
-    vehicle.monthlyStartDate = dto.startDate ?? new Date();
-    vehicle.monthlyEndDate = null;
-    await this.vehicleRepository.save(vehicle);
-
-    const monthlyPrice = Number(monthlyRate.price);
-
-    if (dto.payments) {
+    if (dto.payments && monthlyPrice) {
       const totalPaid = dto.payments.reduce(
         (sum, payment) => sum + payment.amount,
         0,
@@ -171,7 +166,7 @@ export class ParkingService {
     return {
       data: {
         payments: savedPayments,
-        vehicle,
+        subscription,
         monthlyPrice,
       },
       message: 'Mensualidad activada correctamente',
@@ -180,60 +175,27 @@ export class ParkingService {
 
   async cancelMonthly(idTicket: string, idUser: string) {
     const ticket = await this.findOwnedTicket(idTicket, idUser);
-    const vehicle = ticket.vehicle;
 
-    if (!vehicle.monthlyStartDate) {
-      throw new BadRequestException('El vehiculo no tiene mensualidad activa');
-    }
-    if (vehicle.monthlyEndDate) {
-      throw new BadRequestException(
-        'La mensualidad ya no se encuentra vigente',
-      );
-    }
-
-    const endDate = new Date();
-    vehicle.monthlyEndDate = endDate;
-    await this.vehicleRepository.save(vehicle);
-
-    const tickets = await this.ticketRepository.find({
-      where: {
-        vehicle: { idVehicle: vehicle.idVehicle },
-        statusTicket: TicketStatus.COMPLETED,
-      },
-      relations: { business: true },
-    });
-
-    let recalculated = 0;
-    for (const t of tickets) {
-      const total = Number(t.totalAmount ?? 0);
-      const isCovered = total === 0 && t.entryTime >= vehicle.monthlyStartDate;
-      if (!isCovered) {
-        continue;
-      }
-
-      const rates = await this.getRatesForVehicle(
-        t.business.idBusiness,
-        vehicle.vehicleType,
-      );
-      const newTotal =
-        t.exitTime && t.exitTime.getTime() > t.entryTime.getTime()
-          ? this.pricingService.calculateTotal(t.entryTime, t.exitTime, rates)
-          : 0;
-
-      t.totalAmount = newTotal;
-      t.paymentStatus =
-        newTotal === 0
-          ? PaymentStatus.PAID
-          : Number(t.paidAmount) > 0
-            ? PaymentStatus.PARTIAL
-            : PaymentStatus.PENDING;
-      await this.ticketRepository.save(t);
-      recalculated++;
-    }
+    const { recalculatedTickets } = await this.monthlyBillingService.cancel(
+      ticket.vehicle.idVehicle,
+    );
 
     return {
-      data: { vehicle, recalculatedTickets: recalculated },
+      data: { recalculatedTickets },
       message: 'Mensualidad cancelada y dias liquidados',
+    };
+  }
+
+  async getMonthlyStatus(idTicket: string, idUser: string) {
+    const ticket = await this.findOwnedTicket(idTicket, idUser);
+
+    const status = await this.monthlyBillingService.getStatus(
+      ticket.vehicle.idVehicle,
+    );
+
+    return {
+      data: status,
+      message: undefined,
     };
   }
 
@@ -300,7 +262,7 @@ export class ParkingService {
 
     const tickets = await this.ticketRepository.find({
       where: {
-        business: { idBusiness: query.idBusiness },
+        vehicle: { business: { idBusiness: query.idBusiness } },
         statusTicket: query.status,
       },
       relations: { vehicle: true },
@@ -318,7 +280,7 @@ export class ParkingService {
 
     const tickets = await this.ticketRepository.find({
       where: {
-        business: { idBusiness: query.idBusiness },
+        vehicle: { business: { idBusiness: query.idBusiness } },
         statusTicket: TicketStatus.ACTIVE,
       },
       relations: { vehicle: true },
@@ -343,46 +305,20 @@ export class ParkingService {
   }
 
   private async settleTicket(ticket: ParkingTicket, exitTime: Date) {
-    const coveredByMonthly = this.isCoveredByMonthly(ticket);
-    const totalAmount = coveredByMonthly
-      ? 0
-      : this.pricingService.calculateTotal(
-          ticket.entryTime,
-          exitTime,
-          await this.getRatesForVehicle(
-            ticket.business.idBusiness,
-            ticket.vehicle.vehicleType,
-          ),
-        );
+    const totalAmount = this.pricingService.calculateTotal(
+      ticket.entryTime,
+      exitTime,
+      await this.getRatesForVehicle(
+        ticket.vehicle.business.idBusiness,
+        ticket.vehicle.vehicleType,
+      ),
+    );
 
     ticket.exitTime = exitTime;
     ticket.totalAmount = totalAmount;
     ticket.statusTicket = TicketStatus.COMPLETED;
 
-    if (coveredByMonthly) {
-      ticket.paidAmount = 0;
-      ticket.paymentStatus = PaymentStatus.PAID;
-    }
-
     return this.ticketRepository.save(ticket);
-  }
-
-  private isCoveredByMonthly(ticket: ParkingTicket): boolean {
-    const vehicle = ticket.vehicle;
-    if (!vehicle.monthlyStartDate) {
-      return false;
-    }
-    if (ticket.entryTime < vehicle.monthlyStartDate) {
-      return false;
-    }
-    if (vehicle.monthlyEndDate && ticket.entryTime > vehicle.monthlyEndDate) {
-      return false;
-    }
-    return true;
-  }
-
-  private hasActiveMonthly(vehicle: Vehicle): boolean {
-    return !!vehicle.monthlyStartDate && !vehicle.monthlyEndDate;
   }
 
   private async assertParkingBusiness(
@@ -403,7 +339,7 @@ export class ParkingService {
   ): Promise<ParkingTicket> {
     const ticket = await this.ticketRepository.findOne({
       where: { idTicket },
-      relations: { business: true, vehicle: true },
+      relations: { vehicle: { business: true } },
     });
 
     if (!ticket) {
@@ -411,7 +347,7 @@ export class ParkingService {
     }
 
     await this.validator.assertBusinessOwnership(
-      ticket.business.idBusiness,
+      ticket.vehicle.business.idBusiness,
       idUser,
     );
 
@@ -426,7 +362,7 @@ export class ParkingService {
         vehicle: { idVehicle },
         statusTicket: TicketStatus.ACTIVE,
       },
-      relations: { business: true, vehicle: true },
+      relations: { vehicle: { business: true } },
     });
   }
 

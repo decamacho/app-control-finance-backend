@@ -22,9 +22,12 @@ describe('PaymentsService', () => {
     paidAmount: '0',
     paymentStatus: PaymentStatus.PENDING,
     statusOrder: OrderStatus.ACTIVE,
-    business: {
-      idBusiness: 'business-1',
-      businessType: BusinessType.FOOD_SALE,
+    customer: {
+      idCustomer: 'customer-1',
+      business: {
+        idBusiness: 'business-1',
+        businessType: BusinessType.FOOD_SALE,
+      },
     },
   });
 
@@ -34,7 +37,10 @@ describe('PaymentsService', () => {
     paidAmount: '0',
     paymentStatus: PaymentStatus.PENDING,
     statusTicket: TicketStatus.COMPLETED,
-    business: { idBusiness: 'business-1', businessType: BusinessType.PARKING },
+    vehicle: {
+      idVehicle: 'vehicle-1',
+      business: { idBusiness: 'business-1', businessType: BusinessType.PARKING },
+    },
   });
 
   beforeEach(async () => {

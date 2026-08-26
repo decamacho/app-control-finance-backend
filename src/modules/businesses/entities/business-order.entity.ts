@@ -6,12 +6,11 @@ import {
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Business } from './business.entity';
 import { BusinessCustomer } from './business-customer.entity';
 import { BusinessOrderItem } from './business-order-item.entity';
 import { Payment } from './payment.entity';
 import { PaymentStatus } from '../types/payment.enum';
-import { Transaction } from '../../transactions/entities/transaction.entity';
+import { RecurringOrder } from './recurring-order.entity';
 
 export enum OrderStatus {
   ACTIVE = 'ACTIVE',
@@ -38,24 +37,20 @@ export class BusinessOrder {
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.ACTIVE })
   statusOrder!: OrderStatus;
 
-  @ManyToOne(() => Business, (business) => business.orders, {
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'idBusiness' })
-  business!: Business;
-
   @ManyToOne(() => BusinessCustomer, { onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'idCustomer' })
   customer!: BusinessCustomer;
+
+  @ManyToOne(() => RecurringOrder, (ro) => ro.orders, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
+  @JoinColumn({ name: 'idRecurringOrder' })
+  recurringOrder!: RecurringOrder | null;
 
   @OneToMany(() => BusinessOrderItem, (item) => item.order, { cascade: true })
   items!: BusinessOrderItem[];
 
   @OneToMany(() => Payment, (payment) => payment.order)
   payments!: Payment[];
-
-  // Relación financiera futura: NO se escribe en v1.
-  @ManyToOne(() => Transaction, { nullable: true, onDelete: 'SET NULL' })
-  @JoinColumn({ name: 'idTransaction' })
-  transaction!: Transaction | null;
 }

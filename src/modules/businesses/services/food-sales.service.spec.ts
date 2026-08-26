@@ -3,6 +3,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { FoodSalesService } from './food-sales.service';
 import { BusinessValidatorService } from './business-validator.service';
+import { CustomerProductPriceService } from './customer-product-price.service';
 import { BusinessOrder, OrderStatus } from '../entities/business-order.entity';
 import { BusinessOrderItem } from '../entities/business-order-item.entity';
 import { BusinessCustomer } from '../entities/business-customer.entity';
@@ -17,6 +18,7 @@ describe('FoodSalesService', () => {
   let customerRepository: Record<string, jest.Mock>;
   let productRepository: Record<string, jest.Mock>;
   let validator: Record<string, jest.Mock>;
+  let cppService: Record<string, jest.Mock>;
 
   const baseDto = () => ({
     idBusiness: 'business-1',
@@ -32,8 +34,10 @@ describe('FoodSalesService', () => {
     paidAmount: '0',
     paymentStatus: PaymentStatus.PENDING,
     statusOrder: OrderStatus.ACTIVE,
-    business: { idBusiness: 'business-1' },
-    customer: { idCustomer: 'customer-1' },
+    customer: {
+      idCustomer: 'customer-1',
+      business: { idBusiness: 'business-1' },
+    },
     items: [],
   });
 
@@ -63,6 +67,9 @@ describe('FoodSalesService', () => {
       }),
       assertBusinessType: jest.fn(),
     };
+    cppService = {
+      getPrice: jest.fn().mockImplementation((_c, _p, base) => base),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -84,6 +91,7 @@ describe('FoodSalesService', () => {
           useValue: productRepository,
         },
         { provide: BusinessValidatorService, useValue: validator },
+        { provide: CustomerProductPriceService, useValue: cppService },
       ],
     }).compile();
 
@@ -131,7 +139,6 @@ describe('FoodSalesService', () => {
           paidAmount: 0,
           paymentStatus: PaymentStatus.PENDING,
           statusOrder: OrderStatus.ACTIVE,
-          business: { idBusiness: 'business-1' },
           customer: { idCustomer: 'customer-1' },
         }),
       );
@@ -187,7 +194,7 @@ describe('FoodSalesService', () => {
 
       expect(orderRepository.find).toHaveBeenCalledWith({
         where: {
-          business: { idBusiness: 'business-1' },
+          customer: { business: { idBusiness: 'business-1' } },
           statusOrder: OrderStatus.ACTIVE,
           paymentStatus: PaymentStatus.PENDING,
         },
@@ -206,7 +213,10 @@ describe('FoodSalesService', () => {
 
       expect(orderRepository.findOne).toHaveBeenCalledWith({
         where: { idOrder: 'order-1' },
-        relations: { business: true, customer: true, items: { product: true } },
+        relations: {
+          customer: { business: true },
+          items: { product: true },
+        },
       });
       expect(result.data).toEqual(
         expect.objectContaining({

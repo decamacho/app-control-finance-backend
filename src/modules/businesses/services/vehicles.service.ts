@@ -198,8 +198,6 @@ export class VehiclesService {
       ownerName: vehicle.ownerName,
       phoneOwner: vehicle.phoneOwner,
       emailOwner: vehicle.emailOwner,
-      monthlyStartDate: vehicle.monthlyStartDate,
-      monthlyEndDate: vehicle.monthlyEndDate,
     };
   }
 

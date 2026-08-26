@@ -9,6 +9,8 @@ import {
 } from 'typeorm';
 import { Business } from './business.entity';
 import { ParkingTicket } from './parking-ticket.entity';
+import { VehicleMonthlySubscription } from './vehicle-monthly-subscription.entity';
+import { VehicleMonthlyHistory } from './vehicle-monthly-history.entity';
 
 export enum VehicleType {
   MOTO = 'MOTO',
@@ -49,12 +51,6 @@ export class Vehicle {
   @Column({ type: 'varchar', length: 150, nullable: true })
   emailOwner!: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
-  monthlyStartDate!: Date | null;
-
-  @Column({ type: 'timestamp', nullable: true })
-  monthlyEndDate!: Date | null;
-
   @ManyToOne(() => Business, (business) => business.vehicles, {
     onDelete: 'CASCADE',
   })
@@ -63,4 +59,13 @@ export class Vehicle {
 
   @OneToMany(() => ParkingTicket, (ticket) => ticket.vehicle)
   tickets!: ParkingTicket[];
+
+  @OneToMany(
+    () => VehicleMonthlySubscription,
+    (subscription) => subscription.vehicle,
+  )
+  subscriptions!: VehicleMonthlySubscription[];
+
+  @OneToMany(() => VehicleMonthlyHistory, (history) => history.subscription)
+  monthlyHistory!: VehicleMonthlyHistory[];
 }

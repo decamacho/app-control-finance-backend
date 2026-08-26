@@ -34,6 +34,11 @@ export class RegisterEntryDto {
   })
   @MaxLength(12, { message: 'licensePlate no puede superar 12 caracteres' })
   licensePlate!: string;
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate({ message: 'customTime debe ser una fecha valida' })
+  customTime?: Date;
 }
 
 export class ExitTicketDto {
@@ -182,4 +187,15 @@ export class TicketQueryDto {
   @IsNotEmpty()
   @MaxLength(12)
   licensePlate?: string;
+}
+
+export class MonthlyStatusDto {
+  @IsUUID('4', { message: 'Negocio no encontrado' })
+  idBusiness!: string;
+
+  @IsString({ message: 'licensePlate debe ser un texto' })
+  @IsNotEmpty({ message: 'licensePlate es obligatoria' })
+  @Matches(/^[A-Za-z0-9\s-]+$/)
+  @MaxLength(12)
+  licensePlate!: string;
 }
