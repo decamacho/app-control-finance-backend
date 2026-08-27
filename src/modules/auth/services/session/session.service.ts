@@ -12,6 +12,7 @@ export interface CreateSessionParams {
   idUser: string;
   deviceInfo: string;
   ipAddress: string;
+  idSession?: string;
 }
 
 export interface SessionResponse {
@@ -41,7 +42,7 @@ export class SessionService {
     params: CreateSessionParams,
     refreshToken: string,
   ): Promise<{ idSession: string }> {
-    const idSession = this.generateSessionId();
+    const idSession = params.idSession ?? this.generateSessionId();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 

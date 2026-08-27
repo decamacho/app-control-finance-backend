@@ -60,6 +60,7 @@ export class RefreshTokenService {
         idUser: user.idUser,
         deviceInfo,
         ipAddress,
+        idSession: newSessionId,
       },
       tokens.refreshToken,
     );

@@ -11,32 +11,32 @@ import {
 import { BusinessCustomer } from './business-customer.entity';
 import { BusinessOrder } from './business-order.entity';
 
-export enum RecurringFrequency {
-  DAILY = 'DAILY',
-  WEEKLY = 'WEEKLY',
-  BIWEEKLY = 'BIWEEKLY',
-  MONTHLY = 'MONTHLY',
-}
-
 @Entity('recurring_orders')
 export class RecurringOrder {
   @PrimaryGeneratedColumn('uuid')
   idRecurringOrder!: string;
 
-  @Column({ type: 'enum', enum: RecurringFrequency })
-  frequency!: RecurringFrequency;
+  @Column({ type: 'jsonb' })
+  recurringDays!: string[];
 
-  @Column({ type: 'timestamp' })
-  nextDeliveryDate!: Date;
+  @Column({ type: 'time' })
+  deliveryTime!: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
-  totalAmount!: number;
+  @Column({ type: 'date', nullable: true })
+  startDate!: Date | null;
+
+  @Column({ type: 'date', nullable: true })
+  endDate!: Date | null;
 
   @Column({ type: 'boolean', default: true })
   isActive!: boolean;
 
-  @Column({ type: 'text', nullable: true })
-  notes!: string | null;
+  @Column({ type: 'jsonb' })
+  fixedItems!: Array<{
+    productId: string;
+    quantity: number;
+    customPrice?: number;
+  }>;
 
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;

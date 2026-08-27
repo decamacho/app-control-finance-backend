@@ -10,8 +10,14 @@ import { BusinessOrder, OrderStatus } from '../entities/business-order.entity';
 import { BusinessOrderItem } from '../entities/business-order-item.entity';
 import { BusinessCustomer } from '../entities/business-customer.entity';
 import { BusinessProduct } from '../entities/business-product.entity';
-import { CreateOrderDto, OrderQueryDto } from '../dto/food-sales.dto';
+import { RecurringOrder } from '../entities/recurring-order.entity';
+import {
+  CreateOrderDto,
+  OrderQueryDto,
+  RecurringConfigDto,
+} from '../dto/food-sales.dto';
 import { PaymentStatus } from '../types/payment.enum';
+import { DeliveryStatus } from '../types/delivery-status.enum';
 import { BusinessValidatorService } from './business-validator.service';
 import { CustomerProductPriceService } from './customer-product-price.service';
 
@@ -26,6 +32,8 @@ export class FoodSalesService {
     private readonly customerRepository: Repository<BusinessCustomer>,
     @InjectRepository(BusinessProduct)
     private readonly productRepository: Repository<BusinessProduct>,
+    @InjectRepository(RecurringOrder)
+    private readonly recurringOrderRepository: Repository<RecurringOrder>,
     private readonly validator: BusinessValidatorService,
     private readonly customerProductPriceService: CustomerProductPriceService,
   ) {}
@@ -61,7 +69,6 @@ export class FoodSalesService {
         );
       }
 
-      const basePrice = itemDto.unitPrice ?? Number(product.basePrice);
       const unitPrice =
         itemDto.unitPrice !== undefined
           ? itemDto.unitPrice
@@ -88,12 +95,24 @@ export class FoodSalesService {
       totalAmount,
       paidAmount: 0,
       paymentStatus: PaymentStatus.PENDING,
+      deliveryStatus: DeliveryStatus.NOT_DELIVERED,
       statusOrder: OrderStatus.ACTIVE,
       customer: { idCustomer: customer.idCustomer },
       items,
     });
 
     const saved = await this.orderRepository.save(order);
+
+    if (dto.isRecurring && dto.recurringConfig) {
+      const recurring = await this.createRecurringOrder(
+        dto.recurringConfig,
+        customer.idCustomer,
+        dto.items,
+      );
+
+      saved.recurringOrder = recurring;
+      await this.orderRepository.save(saved);
+    }
 
     return {
       data: saved,
@@ -104,13 +123,29 @@ export class FoodSalesService {
   async findAll(query: OrderQueryDto, idUser: string) {
     await this.assertFoodBusiness(query.idBusiness, idUser);
 
+    const where: Record<string, unknown> = {
+      customer: { business: { idBusiness: query.idBusiness } },
+    };
+
+    if (query.status) {
+      where.statusOrder = query.status;
+    }
+
+    if (query.paymentStatus) {
+      where.paymentStatus = query.paymentStatus;
+    }
+
+    if (query.deliveryStatus) {
+      where.deliveryStatus = query.deliveryStatus;
+    }
+
     const orders = await this.orderRepository.find({
-      where: {
-        customer: { business: { idBusiness: query.idBusiness } },
-        statusOrder: query.status,
-        paymentStatus: query.paymentStatus,
+      where,
+      relations: {
+        items: { product: true },
+        customer: true,
+        deliveries: { items: { orderItem: { product: true } } },
       },
-      relations: { items: { product: true }, customer: true },
       order: { deliveryTime: 'DESC' },
     });
 
@@ -145,6 +180,80 @@ export class FoodSalesService {
     };
   }
 
+  async toggleRecurring(
+    idRecurringOrder: string,
+    idUser: string,
+  ) {
+    const recurring = await this.recurringOrderRepository.findOne({
+      where: { idRecurringOrder },
+      relations: { customer: { business: true } },
+    });
+
+    if (!recurring) {
+      throw new NotFoundException('Pedido recurrente no encontrado');
+    }
+
+    await this.validator.assertBusinessOwnership(
+      recurring.customer.business.idBusiness,
+      idUser,
+    );
+
+    recurring.isActive = !recurring.isActive;
+    const saved = await this.recurringOrderRepository.save(recurring);
+
+    return {
+      data: saved,
+      message: recurring.isActive
+        ? 'Pedido recurrente activado'
+        : 'Pedido recurrente desactivado',
+    };
+  }
+
+  async findRecurringOrders(idBusiness: string, idUser: string) {
+    await this.assertFoodBusiness(idBusiness, idUser);
+
+    const recurring = await this.recurringOrderRepository.find({
+      where: { customer: { business: { idBusiness } } },
+      relations: { customer: true },
+      order: { createdAt: 'DESC' },
+    });
+
+    return {
+      data: recurring,
+      message: recurring.length
+        ? undefined
+        : 'No hay pedidos recurrentes configurados',
+    };
+  }
+
+  private async createRecurringOrder(
+    config: RecurringConfigDto,
+    idCustomer: string,
+    items: { idProduct: string; quantity: number; unitPrice?: number }[],
+  ): Promise<RecurringOrder> {
+    const fixedItems = items.map((item) => ({
+      productId: item.idProduct,
+      quantity: item.quantity,
+      customPrice: item.unitPrice,
+    }));
+
+    const recurring = this.recurringOrderRepository.create({
+      recurringDays: config.recurringDays,
+      deliveryTime: config.deliveryTime,
+      startDate: config.startDate
+        ? new Date(config.startDate)
+        : null,
+      endDate: config.endDate
+        ? new Date(config.endDate)
+        : null,
+      isActive: true,
+      fixedItems,
+      customer: { idCustomer },
+    });
+
+    return this.recurringOrderRepository.save(recurring);
+  }
+
   private async findOwnedOrder(
     idOrder: string,
     idUser: string,
@@ -154,6 +263,7 @@ export class FoodSalesService {
       relations: {
         customer: { business: true },
         items: { product: true },
+        deliveries: { items: { orderItem: { product: true } } },
       },
     });
 

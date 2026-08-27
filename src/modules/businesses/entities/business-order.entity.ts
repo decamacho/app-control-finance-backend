@@ -10,7 +10,9 @@ import { BusinessCustomer } from './business-customer.entity';
 import { BusinessOrderItem } from './business-order-item.entity';
 import { Payment } from './payment.entity';
 import { PaymentStatus } from '../types/payment.enum';
+import { DeliveryStatus } from '../types/delivery-status.enum';
 import { RecurringOrder } from './recurring-order.entity';
+import { OrderDelivery } from './order-delivery.entity';
 
 export enum OrderStatus {
   ACTIVE = 'ACTIVE',
@@ -34,6 +36,13 @@ export class BusinessOrder {
   @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.PENDING })
   paymentStatus!: PaymentStatus;
 
+  @Column({
+    type: 'enum',
+    enum: DeliveryStatus,
+    default: DeliveryStatus.NOT_DELIVERED,
+  })
+  deliveryStatus!: DeliveryStatus;
+
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.ACTIVE })
   statusOrder!: OrderStatus;
 
@@ -53,4 +62,24 @@ export class BusinessOrder {
 
   @OneToMany(() => Payment, (payment) => payment.order)
   payments!: Payment[];
+
+  @OneToMany(() => OrderDelivery, (delivery) => delivery.order)
+  deliveries!: OrderDelivery[];
+
+  getDeliveredQuantity(productId: string): number {
+    if (!this.deliveries) return 0;
+    return this.deliveries
+      .flatMap((d) => d.items)
+      .filter((i) => i.orderItem?.product?.idProduct === productId)
+      .reduce((sum, i) => sum + i.quantity, 0);
+  }
+
+  getPendingQuantity(productId: string): number {
+    if (!this.items) return 0;
+    const orderItem = this.items.find(
+      (i) => i.product?.idProduct === productId,
+    );
+    if (!orderItem) return 0;
+    return orderItem.quantity - this.getDeliveredQuantity(productId);
+  }
 }

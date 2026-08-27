@@ -2,6 +2,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDate,
   IsEnum,
   IsInt,
@@ -17,6 +18,7 @@ import {
 } from 'class-validator';
 import { PartialType } from '@nestjs/mapped-types';
 import { PaymentStatus } from '../types/payment.enum';
+import { DeliveryStatus } from '../types/delivery-status.enum';
 import { OrderStatus } from '../entities/business-order.entity';
 
 export class CreateCustomerDto {
@@ -67,6 +69,23 @@ export class CreateOrderItemDto {
   unitPrice?: number;
 }
 
+export class RecurringConfigDto {
+  @IsArray({ message: 'recurringDays debe ser un arreglo' })
+  @ArrayMinSize(1, { message: 'recurringDays debe contener al menos un dia' })
+  recurringDays!: string[];
+
+  @IsString({ message: 'deliveryTime debe ser un texto (HH:mm)' })
+  deliveryTime!: string;
+
+  @IsOptional()
+  @IsString()
+  startDate?: string;
+
+  @IsOptional()
+  @IsString()
+  endDate?: string;
+}
+
 export class CreateOrderDto {
   @IsUUID('4', { message: 'idBusiness debe ser un UUID valido' })
   idBusiness!: string;
@@ -83,6 +102,15 @@ export class CreateOrderDto {
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items!: CreateOrderItemDto[];
+
+  @IsOptional()
+  @IsBoolean()
+  isRecurring?: boolean;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RecurringConfigDto)
+  recurringConfig?: RecurringConfigDto;
 }
 
 export class OrderQueryDto {
@@ -100,4 +128,10 @@ export class OrderQueryDto {
     message: `paymentStatus debe ser uno de: ${Object.values(PaymentStatus).join(', ')}`,
   })
   paymentStatus?: PaymentStatus;
+
+  @IsOptional()
+  @IsEnum(DeliveryStatus, {
+    message: `deliveryStatus debe ser uno de: ${Object.values(DeliveryStatus).join(', ')}`,
+  })
+  deliveryStatus?: DeliveryStatus;
 }

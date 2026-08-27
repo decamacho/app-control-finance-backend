@@ -106,6 +106,7 @@ export class AuthService {
         idUser: user.idUser,
         deviceInfo,
         ipAddress,
+        idSession: sessionId,
       },
       tokens.refreshToken,
     );

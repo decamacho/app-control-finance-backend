@@ -23,6 +23,7 @@ import { MonthlyExpirationCronService } from './services/monthly-expiration-cron
 import { RecurringOrderService } from './services/recurring-order.service';
 import { RecurringOrdersCronService } from './services/recurring-orders-cron.service';
 import { CustomerProductPriceService } from './services/customer-product-price.service';
+import { OrderDeliveryService } from './services/order-delivery.service';
 import { Business } from './entities/business.entity';
 import { Vehicle } from './entities/vehicle.entity';
 import { ParkingRate } from './entities/parking-rate.entity';
@@ -36,6 +37,8 @@ import { VehicleMonthlySubscription } from './entities/vehicle-monthly-subscript
 import { VehicleMonthlyHistory } from './entities/vehicle-monthly-history.entity';
 import { RecurringOrder } from './entities/recurring-order.entity';
 import { CustomerProductPrice } from './entities/customer-product-price.entity';
+import { OrderDelivery } from './entities/order-delivery.entity';
+import { OrderDeliveryItem } from './entities/order-delivery-item.entity';
 import { Transaction } from '../transactions/entities/transaction.entity';
 
 @Module({
@@ -56,6 +59,8 @@ import { Transaction } from '../transactions/entities/transaction.entity';
       VehicleMonthlyHistory,
       RecurringOrder,
       CustomerProductPrice,
+      OrderDelivery,
+      OrderDeliveryItem,
     ]),
   ],
   controllers: [
@@ -83,6 +88,7 @@ import { Transaction } from '../transactions/entities/transaction.entity';
     RecurringOrderService,
     RecurringOrdersCronService,
     CustomerProductPriceService,
+    OrderDeliveryService,
   ],
   exports: [TypeOrmModule, BusinessValidatorService],
 })

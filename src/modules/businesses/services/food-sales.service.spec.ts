@@ -8,6 +8,7 @@ import { BusinessOrder, OrderStatus } from '../entities/business-order.entity';
 import { BusinessOrderItem } from '../entities/business-order-item.entity';
 import { BusinessCustomer } from '../entities/business-customer.entity';
 import { BusinessProduct } from '../entities/business-product.entity';
+import { RecurringOrder } from '../entities/recurring-order.entity';
 import { BusinessType } from '../entities/business.entity';
 import { PaymentStatus } from '../types/payment.enum';
 
@@ -89,6 +90,10 @@ describe('FoodSalesService', () => {
         {
           provide: getRepositoryToken(BusinessProduct),
           useValue: productRepository,
+        },
+        {
+          provide: getRepositoryToken(RecurringOrder),
+          useValue: { find: jest.fn(), save: jest.fn(), create: jest.fn() },
         },
         { provide: BusinessValidatorService, useValue: validator },
         { provide: CustomerProductPriceService, useValue: cppService },
@@ -198,7 +203,11 @@ describe('FoodSalesService', () => {
           statusOrder: OrderStatus.ACTIVE,
           paymentStatus: PaymentStatus.PENDING,
         },
-        relations: { items: { product: true }, customer: true },
+        relations: {
+          items: { product: true },
+          customer: true,
+          deliveries: { items: { orderItem: { product: true } } },
+        },
         order: { deliveryTime: 'DESC' },
       });
       expect(result.data).toHaveLength(1);
@@ -216,6 +225,7 @@ describe('FoodSalesService', () => {
         relations: {
           customer: { business: true },
           items: { product: true },
+          deliveries: { items: { orderItem: { product: true } } },
         },
       });
       expect(result.data).toEqual(

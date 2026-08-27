@@ -129,6 +129,7 @@ describe('RefreshTokenService', () => {
           idUser: 'user-uuid',
           deviceInfo: 'Firefox on Windows',
           ipAddress: '127.0.0.1',
+          idSession: 'new-session-uuid',
         },
         'new-refresh-token',
       );
