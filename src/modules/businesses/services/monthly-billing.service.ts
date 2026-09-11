@@ -88,9 +88,7 @@ export class MonthlyBillingService {
     return { subscription: saved, monthlyPrice };
   }
 
-  async getStatus(
-    idVehicle: string,
-  ): Promise<{
+  async getStatus(idVehicle: string): Promise<{
     subscription: VehicleMonthlySubscription | null;
     monthlyPrice: number | null;
   }> {
@@ -128,9 +126,7 @@ export class MonthlyBillingService {
     };
   }
 
-  async cancel(
-    idVehicle: string,
-  ): Promise<{ recalculatedTickets: number }> {
+  async cancel(idVehicle: string): Promise<{ recalculatedTickets: number }> {
     const subscription = await this.subscriptionRepository.findOne({
       where: {
         vehicle: { idVehicle },

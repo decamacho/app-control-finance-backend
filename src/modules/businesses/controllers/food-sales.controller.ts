@@ -16,7 +16,13 @@ import { User } from '../../users/entities/user.entity';
 import { FoodSalesService } from '../services/food-sales.service';
 import { PaymentsService } from '../services/payments.service';
 import { OrderDeliveryService } from '../services/order-delivery.service';
-import { CreateOrderDto, OrderQueryDto } from '../dto/food-sales.dto';
+import {
+  CreateSaleOrderDto,
+  CreateExpenseOrderDto,
+  UpdateOrderDto,
+  OrderQueryDto,
+  DailySummaryQueryDto,
+} from '../dto/food-sales.dto';
 import { RegisterPaymentsDto } from '../dto/payment.dto';
 import { CreateDeliveryDto } from '../dto/delivery.dto';
 
@@ -30,7 +36,10 @@ export class FoodSalesController {
   ) {}
 
   @Post()
-  create(@Body() createOrderDto: CreateOrderDto, @CurrentUser() user: User) {
+  create(
+    @Body() createOrderDto: CreateSaleOrderDto | CreateExpenseOrderDto,
+    @CurrentUser() user: User,
+  ) {
     return this.foodSalesService.createOrder(createOrderDto, user.idUser);
   }
 
@@ -39,12 +48,51 @@ export class FoodSalesController {
     return this.foodSalesService.findAll(orderQueryDto, user.idUser);
   }
 
+  @Get('summary/:idBusiness')
+  getDailySummary(
+    @Param('idBusiness', ParseUUIDPipe) idBusiness: string,
+    @Query() dailySummaryQueryDto: DailySummaryQueryDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.foodSalesService.getDailySummary(
+      idBusiness,
+      dailySummaryQueryDto,
+      user.idUser,
+    );
+  }
+
+  @Get('summary/:idBusiness/customers')
+  getDailySummaryByCustomer(
+    @Param('idBusiness', ParseUUIDPipe) idBusiness: string,
+    @Query() dailySummaryQueryDto: DailySummaryQueryDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.foodSalesService.getDailySummaryByCustomer(
+      idBusiness,
+      dailySummaryQueryDto,
+      user.idUser,
+    );
+  }
+
   @Get(':idOrder')
   findOne(
     @Param('idOrder', ParseUUIDPipe) idOrder: string,
     @CurrentUser() user: User,
   ) {
     return this.foodSalesService.findOne(idOrder, user.idUser);
+  }
+
+  @Patch(':idOrder')
+  update(
+    @Param('idOrder', ParseUUIDPipe) idOrder: string,
+    @Body() updateOrderDto: UpdateOrderDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.foodSalesService.updateOrder(
+      idOrder,
+      updateOrderDto,
+      user.idUser,
+    );
   }
 
   @Delete(':idOrder')

@@ -5,6 +5,7 @@ import { Business, BusinessType } from '../entities/business.entity';
 import { BusinessCustomer } from '../entities/business-customer.entity';
 import { CreateCustomerDto, UpdateCustomerDto } from '../dto/food-sales.dto';
 import { BusinessValidatorService } from './business-validator.service';
+import { RecurringOrderService } from './recurring-order.service';
 
 @Injectable()
 export class CustomersService {
@@ -12,6 +13,7 @@ export class CustomersService {
     @InjectRepository(BusinessCustomer)
     private readonly customerRepository: Repository<BusinessCustomer>,
     private readonly validator: BusinessValidatorService,
+    private readonly recurringOrderService: RecurringOrderService,
   ) {}
 
   async findAll(idBusiness: string, idUser: string) {
@@ -22,8 +24,19 @@ export class CustomersService {
       order: { nameCustomer: 'ASC' },
     });
 
+    const recurring =
+      await this.recurringOrderService.findActiveForBusiness(idBusiness);
+    const recurringCustomerIds = new Set(
+      recurring.map((r) => r.customer?.idCustomer),
+    );
+
+    const data = customers.map((customer) => ({
+      ...customer,
+      hasRecurringOrder: recurringCustomerIds.has(customer.idCustomer),
+    }));
+
     return {
-      data: customers,
+      data,
       message: customers.length
         ? undefined
         : 'Este negocio no tiene clientes registrados',
@@ -86,6 +99,15 @@ export class CustomersService {
       data: null,
       message: 'Cliente eliminado exitosamente',
     };
+  }
+
+  async getOwnedCustomer(
+    idBusiness: string,
+    idCustomer: string,
+    idUser: string,
+  ): Promise<BusinessCustomer> {
+    await this.assertFoodBusiness(idBusiness, idUser);
+    return this.findOwned(idBusiness, idCustomer);
   }
 
   private async assertFoodBusiness(

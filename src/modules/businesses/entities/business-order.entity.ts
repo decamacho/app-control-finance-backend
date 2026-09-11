@@ -1,11 +1,13 @@
 import {
   Column,
+  CreateDateColumn,
   Entity,
   JoinColumn,
   ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
 } from 'typeorm';
+import { Business } from './business.entity';
 import { BusinessCustomer } from './business-customer.entity';
 import { BusinessOrderItem } from './business-order-item.entity';
 import { Payment } from './payment.entity';
@@ -19,10 +21,18 @@ export enum OrderStatus {
   CANCELLED = 'CANCELLED',
 }
 
+export enum OrderType {
+  SALE = 'SALE',
+  EXPENSE = 'EXPENSE',
+}
+
 @Entity('business_orders')
 export class BusinessOrder {
   @PrimaryGeneratedColumn('uuid')
   idOrder!: string;
+
+  @Column({ type: 'enum', enum: OrderType, default: OrderType.SALE })
+  orderType!: OrderType;
 
   @Column({ type: 'timestamp' })
   deliveryTime!: Date;
@@ -46,9 +56,19 @@ export class BusinessOrder {
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.ACTIVE })
   statusOrder!: OrderStatus;
 
-  @ManyToOne(() => BusinessCustomer, { onDelete: 'RESTRICT' })
+  @Column({ type: 'text', nullable: true })
+  description!: string | null;
+
+  @CreateDateColumn({ type: 'timestamp' })
+  createdAt!: Date;
+
+  @ManyToOne(() => Business, { nullable: true, onDelete: 'RESTRICT' })
+  @JoinColumn({ name: 'idBusiness' })
+  business!: Business | null;
+
+  @ManyToOne(() => BusinessCustomer, { onDelete: 'RESTRICT', nullable: true })
   @JoinColumn({ name: 'idCustomer' })
-  customer!: BusinessCustomer;
+  customer!: BusinessCustomer | null;
 
   @ManyToOne(() => RecurringOrder, (ro) => ro.orders, {
     nullable: true,
@@ -63,7 +83,9 @@ export class BusinessOrder {
   @OneToMany(() => Payment, (payment) => payment.order)
   payments!: Payment[];
 
-  @OneToMany(() => OrderDelivery, (delivery) => delivery.order)
+  @OneToMany(() => OrderDelivery, (delivery) => delivery.order, {
+    cascade: ['insert'],
+  })
   deliveries!: OrderDelivery[];
 
   getDeliveredQuantity(productId: string): number {

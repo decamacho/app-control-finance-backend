@@ -6,7 +6,11 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BusinessType } from '../entities/business.entity';
-import { BusinessOrder, OrderStatus } from '../entities/business-order.entity';
+import {
+  BusinessOrder,
+  OrderStatus,
+  OrderType,
+} from '../entities/business-order.entity';
 import { ParkingTicket, TicketStatus } from '../entities/parking-ticket.entity';
 import { Payment } from '../entities/payment.entity';
 import { RegisterPaymentsDto } from '../dto/payment.dto';
@@ -32,14 +36,24 @@ export class PaymentsService {
   ) {
     const order = await this.findOrder(idOrder);
 
-    await this.validator.assertBusinessOwnership(
-      order.customer.business.idBusiness,
-      idUser,
-    );
-    this.validator.assertBusinessType(
-      order.customer.business,
-      BusinessType.FOOD_SALE,
-    );
+    const business = order.customer?.business ?? order.business;
+
+    if (!business) {
+      throw new BadRequestException('La orden no tiene negocio asociado');
+    }
+
+    await this.validator.assertBusinessOwnership(business.idBusiness, idUser);
+    this.validator.assertBusinessType(business, BusinessType.FOOD_SALE);
+
+    if (order.orderType === OrderType.EXPENSE) {
+      throw new BadRequestException(
+        'Los gastos no requieren registro de pagos',
+      );
+    }
+
+    if (!order.customer) {
+      throw new BadRequestException('Esta orden no tiene cliente asociado');
+    }
 
     if (order.statusOrder !== OrderStatus.ACTIVE) {
       throw new BadRequestException(
@@ -64,6 +78,7 @@ export class PaymentsService {
       this.paymentRepository.create({
         amount: payment.amount,
         paymentMethod: payment.paymentMethod,
+        paymentDate: this.resolvePaymentDate(dto),
         order: { idOrder: order.idOrder },
       }),
     );
@@ -128,6 +143,7 @@ export class PaymentsService {
       this.paymentRepository.create({
         amount: payment.amount,
         paymentMethod: payment.paymentMethod,
+        paymentDate: this.resolvePaymentDate(dto),
         ticket: { idTicket: ticket.idTicket },
       }),
     );
@@ -156,10 +172,20 @@ export class PaymentsService {
   async findOrderPayments(idOrder: string, idUser: string) {
     const order = await this.findOrder(idOrder);
 
-    await this.validator.assertBusinessOwnership(
-      order.customer.business.idBusiness,
-      idUser,
-    );
+    const business = order.customer?.business ?? order.business;
+
+    if (!business) {
+      throw new BadRequestException('La orden no tiene negocio asociado');
+    }
+
+    await this.validator.assertBusinessOwnership(business.idBusiness, idUser);
+
+    if (order.orderType === OrderType.EXPENSE) {
+      return {
+        data: [],
+        message: 'Este pedido no tiene pagos registrados',
+      };
+    }
 
     const payments = await this.paymentRepository.find({
       where: { order: { idOrder } },
@@ -199,18 +225,33 @@ export class PaymentsService {
     return Math.round((total - paid) * 100) / 100;
   }
 
+  private resolvePaymentDate(dto: RegisterPaymentsDto): Date | null {
+    if (!dto.paymentDate) return null;
+
+    const paymentDate = new Date(dto.paymentDate);
+
+    if (paymentDate.getTime() > Date.now()) {
+      throw new BadRequestException(
+        'La fecha de pago no puede ser una fecha futura',
+      );
+    }
+
+    return paymentDate;
+  }
+
   private toPaymentResponse(payment: Payment) {
     return {
       idPayment: payment.idPayment,
       amount: payment.amount,
       paymentMethod: payment.paymentMethod,
+      paymentDate: payment.paymentDate,
     };
   }
 
   private async findOrder(idOrder: string): Promise<BusinessOrder> {
     const order = await this.orderRepository.findOne({
       where: { idOrder },
-      relations: { customer: { business: true } },
+      relations: { customer: { business: true }, business: true },
     });
 
     if (!order) {

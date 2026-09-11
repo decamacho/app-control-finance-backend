@@ -41,10 +41,7 @@ export class RefreshTokenService {
       refreshToken,
     );
 
-    await this.sessionService.invalidateSession(
-      session.idSession,
-      user.idUser,
-    );
+    await this.sessionService.invalidateSession(session.idSession, user.idUser);
 
     const newSessionId = this.sessionService.generateSessionId();
 

@@ -7,7 +7,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OrderDelivery } from '../entities/order-delivery.entity';
 import { OrderDeliveryItem } from '../entities/order-delivery-item.entity';
-import { BusinessOrder, OrderStatus } from '../entities/business-order.entity';
+import {
+  BusinessOrder,
+  OrderStatus,
+  OrderType,
+} from '../entities/business-order.entity';
 import { BusinessOrderItem } from '../entities/business-order-item.entity';
 import { DeliveryStatus } from '../types/delivery-status.enum';
 import { CreateDeliveryDto } from '../dto/delivery.dto';
@@ -36,6 +40,7 @@ export class OrderDeliveryService {
       where: { idOrder },
       relations: {
         customer: { business: true },
+        business: true,
         items: { product: true },
         deliveries: { items: { orderItem: { product: true } } },
       },
@@ -45,10 +50,20 @@ export class OrderDeliveryService {
       throw new NotFoundException('Pedido no encontrado');
     }
 
-    await this.validator.assertBusinessOwnership(
-      order.customer.business.idBusiness,
-      idUser,
-    );
+    const idBusiness =
+      order.customer?.business?.idBusiness ?? order.business?.idBusiness;
+
+    if (!idBusiness) {
+      throw new BadRequestException('La orden no tiene negocio asociado');
+    }
+
+    await this.validator.assertBusinessOwnership(idBusiness, idUser);
+
+    if (order.orderType === OrderType.EXPENSE) {
+      throw new BadRequestException(
+        'No se pueden registrar entregas en un gasto',
+      );
+    }
 
     if (order.statusOrder === OrderStatus.CANCELLED) {
       throw new BadRequestException(
@@ -94,25 +109,20 @@ export class OrderDeliveryService {
       );
     }
 
-    const deliveryStatus = this.calculateDeliveryStatus(
-      order,
-      deliveryItems,
-    );
+    const deliveryStatus = this.calculateDeliveryStatus(order, deliveryItems);
 
     const delivery = this.deliveryRepository.create({
       status: deliveryStatus,
       notes: dto.notes ?? null,
-      order: { idOrder: order.idOrder },
       items: deliveryItems,
     });
 
-    const saved = await this.deliveryRepository.save(delivery);
-
     order.deliveryStatus = deliveryStatus;
+    order.deliveries.push(delivery);
     await this.orderRepository.save(order);
 
     return {
-      data: saved,
+      data: delivery,
       message: 'Entrega registrada exitosamente',
     };
   }
@@ -120,17 +130,28 @@ export class OrderDeliveryService {
   async findDeliveries(idOrder: string, idUser: string) {
     const order = await this.orderRepository.findOne({
       where: { idOrder },
-      relations: { customer: { business: true } },
+      relations: { customer: { business: true }, business: true },
     });
 
     if (!order) {
       throw new NotFoundException('Pedido no encontrado');
     }
 
-    await this.validator.assertBusinessOwnership(
-      order.customer.business.idBusiness,
-      idUser,
-    );
+    const idBusiness =
+      order.customer?.business?.idBusiness ?? order.business?.idBusiness;
+
+    if (!idBusiness) {
+      throw new BadRequestException('La orden no tiene negocio asociado');
+    }
+
+    await this.validator.assertBusinessOwnership(idBusiness, idUser);
+
+    if (order.orderType === OrderType.EXPENSE) {
+      return {
+        data: [],
+        message: 'Este pedido no tiene entregas registradas',
+      };
+    }
 
     const deliveries = await this.deliveryRepository.find({
       where: { order: { idOrder } },
@@ -151,6 +172,7 @@ export class OrderDeliveryService {
       where: { idOrder },
       relations: {
         customer: { business: true },
+        business: true,
         items: { product: true },
         deliveries: { items: { orderItem: { product: true } } },
       },
@@ -160,10 +182,25 @@ export class OrderDeliveryService {
       throw new NotFoundException('Pedido no encontrado');
     }
 
-    await this.validator.assertBusinessOwnership(
-      order.customer.business.idBusiness,
-      idUser,
-    );
+    const idBusiness =
+      order.customer?.business?.idBusiness ?? order.business?.idBusiness;
+
+    if (!idBusiness) {
+      throw new BadRequestException('La orden no tiene negocio asociado');
+    }
+
+    await this.validator.assertBusinessOwnership(idBusiness, idUser);
+
+    if (order.orderType === OrderType.EXPENSE) {
+      return {
+        data: {
+          idOrder: order.idOrder,
+          deliveryStatus: order.deliveryStatus,
+          items: [],
+        },
+        message: undefined,
+      };
+    }
 
     const summary = order.items.map((item) => {
       const deliveredQty = this.getDeliveredQuantityForItem(
@@ -217,8 +254,7 @@ export class OrderDeliveryService {
         (d) => d.orderItem?.idOrderItem === orderItem.idOrderItem,
       );
 
-      const deliveredAfter =
-        deliveredBefore + (newDeliveryItem?.quantity ?? 0);
+      const deliveredAfter = deliveredBefore + (newDeliveryItem?.quantity ?? 0);
 
       return deliveredAfter >= orderItem.quantity;
     });

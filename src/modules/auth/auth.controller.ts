@@ -106,7 +106,10 @@ export class AuthController {
 
   @Public()
   @Post('refresh')
-  async refresh(@Req() req: Request) {
+  async refresh(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const refreshToken = req.cookies?.refreshToken as string | undefined;
 
     if (!refreshToken) {
@@ -117,11 +120,21 @@ export class AuthController {
     const ipAddress =
       (req.ip as string) ?? req.socket.remoteAddress ?? 'unknown';
 
-    return this.refreshTokenService.refresh(
+    const result = await this.refreshTokenService.refresh(
       refreshToken,
       deviceInfo,
       ipAddress,
     );
+
+    res.cookie('refreshToken', result.refreshToken, {
+      httpOnly: true,
+      secure: this.cookieSecure,
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      path: '/auth/refresh',
+    });
+
+    return { accessToken: result.accessToken };
   }
 
   @Public()

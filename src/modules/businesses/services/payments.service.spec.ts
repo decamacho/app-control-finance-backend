@@ -39,7 +39,10 @@ describe('PaymentsService', () => {
     statusTicket: TicketStatus.COMPLETED,
     vehicle: {
       idVehicle: 'vehicle-1',
-      business: { idBusiness: 'business-1', businessType: BusinessType.PARKING },
+      business: {
+        idBusiness: 'business-1',
+        businessType: BusinessType.PARKING,
+      },
     },
   });
 
@@ -177,6 +180,63 @@ describe('PaymentsService', () => {
         }),
       );
       expect(result.data.payments[0].paymentMethod).toBe(PaymentMethod.CASH);
+    });
+
+    it('registra pago con fecha retroactiva', async () => {
+      orderRepository.findOne.mockResolvedValue(baseOrder());
+      const backdated = new Date('2025-01-02T12:00:00.000Z');
+
+      const result = await service.registerOrderPayment(
+        'order-1',
+        {
+          payments: [{ amount: 3000, paymentMethod: PaymentMethod.CASH }],
+          paymentDate: backdated,
+        },
+        'user-1',
+      );
+
+      expect(paymentRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 3000,
+          paymentMethod: PaymentMethod.CASH,
+          paymentDate: backdated,
+        }),
+      );
+      expect(result.data.payments[0].paymentDate).toEqual(backdated);
+    });
+
+    it('rechaza una fecha de pago futura', async () => {
+      orderRepository.findOne.mockResolvedValue(baseOrder());
+
+      await expect(
+        service.registerOrderPayment(
+          'order-1',
+          {
+            payments: [{ amount: 3000, paymentMethod: PaymentMethod.CASH }],
+            paymentDate: new Date('2099-12-31T12:00:00.000Z'),
+          },
+          'user-1',
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('deja paymentDate en null cuando el pago es del mismo día', async () => {
+      orderRepository.findOne.mockResolvedValue(baseOrder());
+
+      const result = await service.registerOrderPayment(
+        'order-1',
+        { payments: [{ amount: 3000, paymentMethod: PaymentMethod.NEQUI }] },
+        'user-1',
+      );
+
+      expect(paymentRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 3000,
+          paymentMethod: PaymentMethod.NEQUI,
+          paymentDate: null,
+        }),
+      );
+      expect(result.data.payments[0].paymentDate).toBeNull();
     });
 
     it('rechaza pagos que superan el total del pedido', async () => {

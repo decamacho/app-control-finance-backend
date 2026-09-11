@@ -58,14 +58,12 @@ export class RecurringOrdersCronService {
       .andWhere(`ro."recurringDays" @> :dayJson`, {
         dayJson: JSON.stringify([dayOfWeek]),
       })
-      .andWhere(
-        `(ro."startDate" IS NULL OR ro."startDate" <= :today)`,
-        { today: todayStr },
-      )
-      .andWhere(
-        `(ro."endDate" IS NULL OR ro."endDate" >= :today)`,
-        { today: todayStr },
-      )
+      .andWhere(`(ro."startDate" IS NULL OR ro."startDate" <= :today)`, {
+        today: todayStr,
+      })
+      .andWhere(`(ro."endDate" IS NULL OR ro."endDate" >= :today)`, {
+        today: todayStr,
+      })
       .getMany();
 
     let generated = 0;
@@ -106,7 +104,10 @@ export class RecurringOrdersCronService {
 
         let unitPrice: number;
 
-        if (fixedItem.customPrice !== undefined && fixedItem.customPrice !== null) {
+        if (
+          fixedItem.customPrice !== undefined &&
+          fixedItem.customPrice !== null
+        ) {
           unitPrice = fixedItem.customPrice;
         } else {
           unitPrice = await this.customerProductPriceService.getPrice(

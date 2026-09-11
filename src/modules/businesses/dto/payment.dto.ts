@@ -2,8 +2,10 @@ import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   IsArray,
+  IsDate,
   IsEnum,
   IsNumber,
+  IsOptional,
   IsPositive,
   ValidateNested,
 } from 'class-validator';
@@ -26,4 +28,9 @@ export class RegisterPaymentsDto {
   @ValidateNested({ each: true })
   @Type(() => RegisterPaymentItemDto)
   payments!: RegisterPaymentItemDto[];
+
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate({ message: 'paymentDate debe ser una fecha valida' })
+  paymentDate?: Date;
 }

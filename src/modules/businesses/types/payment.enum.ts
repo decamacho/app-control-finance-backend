@@ -6,6 +6,7 @@ export enum PaymentStatus {
 
 export enum PaymentMethod {
   NEQUI = 'NEQUI',
+  DEVIPLATA = 'DEVIPLATA',
   CASH = 'CASH',
   BREVE = 'BREVE',
   LLAVE = 'LLAVE',

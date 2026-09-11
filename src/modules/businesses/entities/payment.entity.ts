@@ -24,6 +24,9 @@ export class Payment {
   @CreateDateColumn({ type: 'timestamp' })
   createdAt!: Date;
 
+  @Column({ type: 'timestamp', nullable: true })
+  paymentDate!: Date | null;
+
   @ManyToOne(() => BusinessOrder, (order) => order.payments, {
     nullable: true,
     onDelete: 'RESTRICT',

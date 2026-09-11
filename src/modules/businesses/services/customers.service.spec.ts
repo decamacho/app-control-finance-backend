@@ -3,6 +3,7 @@ import { NotFoundException } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CustomersService } from './customers.service';
 import { BusinessValidatorService } from './business-validator.service';
+import { RecurringOrderService } from './recurring-order.service';
 import { BusinessCustomer } from '../entities/business-customer.entity';
 import { BusinessType } from '../entities/business.entity';
 
@@ -10,6 +11,7 @@ describe('CustomersService', () => {
   let service: CustomersService;
   let customerRepository: Record<string, jest.Mock>;
   let validator: Record<string, jest.Mock>;
+  let recurringOrderService: Record<string, jest.Mock>;
 
   beforeEach(async () => {
     customerRepository = {
@@ -29,6 +31,9 @@ describe('CustomersService', () => {
       }),
       assertBusinessType: jest.fn(),
     };
+    recurringOrderService = {
+      findActiveForBusiness: jest.fn().mockResolvedValue([]),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -38,6 +43,7 @@ describe('CustomersService', () => {
           useValue: customerRepository,
         },
         { provide: BusinessValidatorService, useValue: validator },
+        { provide: RecurringOrderService, useValue: recurringOrderService },
       ],
     }).compile();
 
@@ -60,11 +66,35 @@ describe('CustomersService', () => {
         where: { business: { idBusiness: 'business-1' } },
         order: { nameCustomer: 'ASC' },
       });
+      expect(recurringOrderService.findActiveForBusiness).toHaveBeenCalledWith(
+        'business-1',
+      );
       expect(validator.assertBusinessType).toHaveBeenCalledWith(
         expect.objectContaining({ businessType: BusinessType.FOOD_SALE }),
         BusinessType.FOOD_SALE,
       );
       expect(result.data).toHaveLength(1);
+      expect(result.data[0]).toMatchObject({
+        idCustomer: 'customer-1',
+        hasRecurringOrder: false,
+      });
+    });
+
+    it('marca hasRecurringOrder: true cuando el cliente tiene recurrencia activa', async () => {
+      customerRepository.find.mockResolvedValue([
+        { idCustomer: 'customer-1', nameCustomer: 'Ana' },
+        { idCustomer: 'customer-2', nameCustomer: 'Luis' },
+      ]);
+      recurringOrderService.findActiveForBusiness.mockResolvedValue([
+        { customer: { idCustomer: 'customer-1' } },
+      ]);
+
+      const result = await service.findAll('business-1', 'user-1');
+
+      expect(result.data).toMatchObject([
+        { idCustomer: 'customer-1', hasRecurringOrder: true },
+        { idCustomer: 'customer-2', hasRecurringOrder: false },
+      ]);
     });
   });
 

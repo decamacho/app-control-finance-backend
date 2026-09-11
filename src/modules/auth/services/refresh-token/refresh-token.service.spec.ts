@@ -108,7 +108,9 @@ describe('RefreshTokenService', () => {
         accessToken: 'new-access-token',
         refreshToken: 'new-refresh-token',
       });
-      sessionService.create.mockResolvedValue({ idSession: 'new-session-uuid' });
+      sessionService.create.mockResolvedValue({
+        idSession: 'new-session-uuid',
+      });
 
       const result = await service.refresh(
         'valid-refresh-token',
@@ -143,9 +145,9 @@ describe('RefreshTokenService', () => {
       });
       userRepository.findOne.mockResolvedValue(null);
 
-      await expect(
-        service.refresh('token', 'device', 'ip'),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.refresh('token', 'device', 'ip')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw when session validation fails', async () => {
@@ -159,9 +161,7 @@ describe('RefreshTokenService', () => {
         new Error('Session not found'),
       );
 
-      await expect(
-        service.refresh('token', 'device', 'ip'),
-      ).rejects.toThrow();
+      await expect(service.refresh('token', 'device', 'ip')).rejects.toThrow();
     });
   });
 });

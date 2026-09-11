@@ -1,13 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CustomerProductPrice } from '../entities/customer-product-price.entity';
+import { BusinessProduct } from '../entities/business-product.entity';
 
 @Injectable()
 export class CustomerProductPriceService {
   constructor(
     @InjectRepository(CustomerProductPrice)
     private readonly cppRepository: Repository<CustomerProductPrice>,
+    @InjectRepository(BusinessProduct)
+    private readonly productRepository: Repository<BusinessProduct>,
   ) {}
 
   async getPrice(
@@ -29,13 +32,31 @@ export class CustomerProductPriceService {
     idCustomer: string,
     idProduct: string,
     customPrice: number,
-  ): Promise<CustomerProductPrice> {
-    let existing = await this.cppRepository.findOne({
+  ): Promise<CustomerProductPrice | null> {
+    const product = await this.productRepository.findOne({
+      where: { idProduct },
+    });
+
+    if (!product) {
+      throw new NotFoundException('Producto no encontrado');
+    }
+
+    const equalsBase =
+      this.round2(customPrice) === this.round2(Number(product.basePrice));
+
+    const existing = await this.cppRepository.findOne({
       where: {
         customer: { idCustomer },
         product: { idProduct },
       },
     });
+
+    if (equalsBase) {
+      if (existing) {
+        await this.cppRepository.remove(existing);
+      }
+      return null;
+    }
 
     if (existing) {
       existing.customPrice = customPrice;
@@ -56,5 +77,9 @@ export class CustomerProductPriceService {
       where: { customer: { idCustomer } },
       relations: { product: true },
     });
+  }
+
+  private round2(value: number): number {
+    return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
   }
 }
