@@ -23,6 +23,7 @@ describe('FoodSalesService', () => {
   let paymentRepository: Record<string, jest.Mock>;
   let validator: Record<string, jest.Mock>;
   let cppService: Record<string, jest.Mock>;
+  let recurringOrderRepository: Record<string, jest.Mock>;
 
   const baseDto = () => ({
     idBusiness: 'business-1',
@@ -79,6 +80,12 @@ describe('FoodSalesService', () => {
         .fn()
         .mockImplementation((_c: unknown, _p: unknown, base: unknown) => base),
     };
+    recurringOrderRepository = {
+      findOne: jest.fn(),
+      find: jest.fn(),
+      save: jest.fn(),
+      create: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -105,7 +112,7 @@ describe('FoodSalesService', () => {
         },
         {
           provide: getRepositoryToken(RecurringOrder),
-          useValue: { find: jest.fn(), save: jest.fn(), create: jest.fn() },
+          useValue: recurringOrderRepository,
         },
         { provide: BusinessValidatorService, useValue: validator },
         { provide: CustomerProductPriceService, useValue: cppService },
@@ -196,6 +203,61 @@ describe('FoodSalesService', () => {
       await expect(service.createOrder(baseDto(), 'user-1')).rejects.toThrow(
         BadRequestException,
       );
+    });
+
+    it('rechaza crear recurrencia si el cliente ya tiene una activa', async () => {
+      customerRepository.findOne.mockResolvedValue({
+        idCustomer: 'customer-1',
+      });
+      recurringOrderRepository.findOne.mockResolvedValue({
+        idRecurringOrder: 'recurring-1',
+        isActive: true,
+      });
+
+      await expect(
+        service.createOrder(
+          {
+            ...baseDto(),
+            isRecurring: true,
+            recurringConfig: {
+              recurringDays: ['MON', 'WED'],
+              deliveryTime: '08:30',
+            },
+          },
+          'user-1',
+        ),
+      ).rejects.toThrow('El cliente ya tiene un pedido recurrente configurado');
+    });
+
+    it('permite crear recurrencia si la existente está desactivada', async () => {
+      customerRepository.findOne.mockResolvedValue({
+        idCustomer: 'customer-1',
+      });
+      recurringOrderRepository.findOne.mockResolvedValue(null);
+      productRepository.findOne.mockResolvedValue({
+        idProduct: 'product-1',
+        basePrice: '2500',
+      });
+
+      const result = await service.createOrder(
+        {
+          ...baseDto(),
+          isRecurring: true,
+          recurringConfig: {
+            recurringDays: ['MON', 'WED'],
+            deliveryTime: '08:30',
+          },
+        },
+        'user-1',
+      );
+
+      expect(recurringOrderRepository.findOne).toHaveBeenCalledWith({
+        where: {
+          customer: { idCustomer: 'customer-1' },
+          isActive: true,
+        },
+      });
+      expect(result.message).toBe('Pedido creado exitosamente');
     });
   });
 
@@ -432,6 +494,7 @@ describe('FoodSalesService', () => {
               '2026-01-02T00:00:00.000Z',
               '2026-01-02T23:59:59.999Z',
             ),
+            order: { statusOrder: OrderStatus.ACTIVE },
           },
           {
             paymentDate: IsNull(),
@@ -448,7 +511,7 @@ describe('FoodSalesService', () => {
       expect(result.data).toEqual({
         date: '2026-01-02',
         received: 8500,
-        cash: 5000,
+        cash: -40000,
         otherPayment: 3500,
         expenses: 45000,
         net: -36500,
@@ -607,7 +670,7 @@ describe('FoodSalesService', () => {
       expect(result.data.date).toBe('2026-01-02');
       expect(result.data.summary).toEqual({
         received: 50000,
-        cash: 50000,
+        cash: 41700,
         otherPayment: 0,
         expenses: 8300,
         net: 41700,

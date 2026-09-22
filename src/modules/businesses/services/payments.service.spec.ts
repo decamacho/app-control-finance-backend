@@ -184,13 +184,13 @@ describe('PaymentsService', () => {
 
     it('registra pago con fecha retroactiva', async () => {
       orderRepository.findOne.mockResolvedValue(baseOrder());
-      const backdated = new Date('2025-01-02T12:00:00.000Z');
+      const backdated = new Date('2025-01-02T05:00:00.000Z');
 
       const result = await service.registerOrderPayment(
         'order-1',
         {
           payments: [{ amount: 3000, paymentMethod: PaymentMethod.CASH }],
-          paymentDate: backdated,
+          paymentDate: new Date('2025-01-02T12:00:00.000Z'),
         },
         'user-1',
       );
