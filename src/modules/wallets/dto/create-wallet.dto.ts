@@ -1,1 +1,1 @@
-export class CreateWalletDto {}
+export { CreateWalletDto } from './wallet.dto';

@@ -12,6 +12,7 @@ export interface CreateSessionParams {
   idUser: string;
   deviceInfo: string;
   ipAddress: string;
+  idSession?: string;
 }
 
 export interface SessionResponse {
@@ -41,7 +42,7 @@ export class SessionService {
     params: CreateSessionParams,
     refreshToken: string,
   ): Promise<{ idSession: string }> {
-    const idSession = this.generateSessionId();
+    const idSession = params.idSession ?? this.generateSessionId();
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
@@ -119,6 +120,8 @@ export class SessionService {
           expiresAt: new Date(data.expiresAt),
           isActive: data.isActive === 'true',
         });
+      } else {
+        await this.redisService.srem(this.userSessionsKey(idUser), idSession);
       }
     }
 
@@ -143,9 +146,11 @@ export class SessionService {
     }
 
     if (new Date() > new Date(data.expiresAt)) {
-      await this.redisService.hset(this.sessionKey(idSession), {
-        isActive: 'false',
-      });
+      await this.redisService.del(this.sessionKey(idSession));
+      await this.redisService.srem(
+        this.userSessionsKey(data.idUser),
+        idSession,
+      );
       throw new ForbiddenException(AUTH_ERRORS.SESSION_EXPIRED);
     }
 
@@ -173,9 +178,7 @@ export class SessionService {
       throw new NotFoundException(AUTH_ERRORS.SESSION_NOT_FOUND);
     }
 
-    await this.redisService.hset(this.sessionKey(idSession), {
-      isActive: 'false',
-    });
+    await this.redisService.del(this.sessionKey(idSession));
 
     await this.redisService.srem(this.userSessionsKey(idUser), idSession);
   }
@@ -186,9 +189,7 @@ export class SessionService {
     );
 
     for (const idSession of sessionIds) {
-      await this.redisService.hset(this.sessionKey(idSession), {
-        isActive: 'false',
-      });
+      await this.redisService.del(this.sessionKey(idSession));
     }
 
     await this.redisService.del(this.userSessionsKey(idUser));

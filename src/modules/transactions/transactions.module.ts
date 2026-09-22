@@ -8,12 +8,27 @@ import { TransactionType } from './entities/transaction-type.entity';
 import { Alert } from '../alerts/entities/alert.entity';
 import { TransactionSplitUser } from '../splits/entities/split.entity';
 import { savingGoal } from '../goals/entities/goal.entity';
+import { Wallet } from '../wallets/entities/wallet.entity';
+import { WalletUser } from '../wallets/entities/wallet-user.entity';
+import { Category } from '../categories/entities/category.entity';
+import { User } from '../users/entities/user.entity';
 import { TypeTransactionService } from './services/transaction-type.service';
 import { TypeTransactionsController } from './controllers/transactions-type.controller';
+import { TransactionValidatorService } from './services/transaction-validator.service';
+import { TransferService } from './services/transfer.service';
+import { TransactionHistoryService } from './services/transaction-history.service';
+import { SplitsModule } from '../splits/splits.module';
+import { TransactionCategory } from './entities/transaction-category.entity';
 
 @Module({
   controllers: [TransactionsController, TypeTransactionsController],
-  providers: [TransactionsService, TypeTransactionService],
+  providers: [
+    TransactionsService,
+    TypeTransactionService,
+    TransactionValidatorService,
+    TransferService,
+    TransactionHistoryService,
+  ],
   imports: [
     TypeOrmModule.forFeature([
       Transaction,
@@ -21,8 +36,14 @@ import { TypeTransactionsController } from './controllers/transactions-type.cont
       TransactionType,
       Alert,
       TransactionSplitUser,
+      TransactionCategory,
       savingGoal,
+      Wallet,
+      WalletUser,
+      Category,
+      User,
     ]),
+    SplitsModule,
   ],
   exports: [TypeOrmModule],
 })

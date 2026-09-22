@@ -26,5 +26,5 @@ export class WalletUser {
 
   @ManyToOne(() => Wallet, (wallet) => wallet.wallets, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'idWallet' })
-  wallets!: User;
+  wallets!: Wallet;
 }

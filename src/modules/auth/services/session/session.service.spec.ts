@@ -105,6 +105,19 @@ describe('SessionService', () => {
       expect(result).toHaveLength(1);
       expect(result[0].idSession).toBe('session-uuid');
     });
+
+    it('should prune orphan session ids from the user set', async () => {
+      mockRedis.smembers.mockResolvedValue(['session-uuid']);
+      mockRedis.hgetall.mockResolvedValue({});
+
+      const result = await service.findByUserId('user-uuid');
+
+      expect(result).toHaveLength(0);
+      expect(redisService.srem).toHaveBeenCalledWith(
+        'user_sessions:user-uuid',
+        'session-uuid',
+      );
+    });
   });
 
   describe('validateRefreshToken', () => {
@@ -138,6 +151,12 @@ describe('SessionService', () => {
       await expect(
         service.validateRefreshToken('session-uuid', 'token'),
       ).rejects.toThrow(ForbiddenException);
+
+      expect(redisService.del).toHaveBeenCalledWith('session:session-uuid');
+      expect(redisService.srem).toHaveBeenCalledWith(
+        'user_sessions:user-uuid',
+        'session-uuid',
+      );
     });
 
     it('should throw ForbiddenException for invalid refresh token', async () => {
@@ -151,13 +170,16 @@ describe('SessionService', () => {
   });
 
   describe('invalidateSession', () => {
-    it('should mark session as inactive', async () => {
+    it('should delete the session from Redis', async () => {
       mockRedis.hgetall.mockResolvedValue(mockSessionData);
 
       await service.invalidateSession('session-uuid', 'user-uuid');
 
-      expect(redisService.hset).toHaveBeenCalled();
-      expect(redisService.srem).toHaveBeenCalled();
+      expect(redisService.del).toHaveBeenCalledWith('session:session-uuid');
+      expect(redisService.srem).toHaveBeenCalledWith(
+        'user_sessions:user-uuid',
+        'session-uuid',
+      );
     });
 
     it('should throw NotFoundException when session not found', async () => {
@@ -170,16 +192,17 @@ describe('SessionService', () => {
   });
 
   describe('invalidateAllUserSessions', () => {
-    it('should mark all user sessions as inactive', async () => {
+    it('should delete all user sessions from Redis', async () => {
       mockRedis.smembers.mockResolvedValue(['session-uuid', 'session-uuid-2']);
-      mockRedis.hgetall.mockResolvedValue(mockSessionData);
 
-      mockRedis.hset.mockClear();
+      mockRedis.del.mockClear();
 
       await service.invalidateAllUserSessions('user-uuid');
 
-      expect(redisService.hset).toHaveBeenCalledTimes(2);
-      expect(redisService.del).toHaveBeenCalledTimes(1);
+      expect(redisService.del).toHaveBeenCalledTimes(3);
+      expect(redisService.del).toHaveBeenCalledWith('session:session-uuid');
+      expect(redisService.del).toHaveBeenCalledWith('session:session-uuid-2');
+      expect(redisService.del).toHaveBeenCalledWith('user_sessions:user-uuid');
     });
   });
 

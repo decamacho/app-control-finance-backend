@@ -18,6 +18,13 @@ export enum SplitStatus {
   SETTLED = 'SETTLED',
 }
 
+export enum SplitMethod {
+  EQUAL = 'EQUAL',
+  PERCENTAGE = 'PERCENTAGE',
+  EXACT = 'EXACT',
+  SHARES = 'SHARES',
+}
+
 @Entity('transactionSplitsUsers')
 export class TransactionSplitUser {
   @PrimaryGeneratedColumn('uuid')
@@ -38,6 +45,13 @@ export class TransactionSplitUser {
     default: SplitStatus.PENDING,
   })
   statusSplit!: SplitStatus;
+
+  @Column({
+    type: 'enum',
+    enum: SplitMethod,
+    nullable: true,
+  })
+  splitMethod!: SplitMethod | null;
 
   @Column({ type: 'varchar', length: 150, nullable: true })
   friendName!: string | null;

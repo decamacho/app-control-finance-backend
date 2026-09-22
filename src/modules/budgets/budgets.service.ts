@@ -5,6 +5,7 @@ import { UpdateBudgetDto } from './dto/update-budget.dto';
 @Injectable()
 export class BudgetsService {
   create(createBudgetDto: CreateBudgetDto) {
+    void createBudgetDto;
     return 'This action adds a new budget';
   }
 
@@ -17,6 +18,7 @@ export class BudgetsService {
   }
 
   update(id: number, updateBudgetDto: UpdateBudgetDto) {
+    void updateBudgetDto;
     return `This action updates a #${id} budget`;
   }
 

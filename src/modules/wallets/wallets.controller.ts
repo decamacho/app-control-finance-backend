@@ -1,17 +1,19 @@
 import {
-  Controller,
-  Get,
-  Post,
   Body,
-  Patch,
-  Param,
+  Controller,
   Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { User } from '../users/entities/user.entity';
 import { WalletsService } from './wallets.service';
-import { CreateWalletDto } from './dto/create-wallet.dto';
-import { UpdateWalletDto } from './dto/update-wallet.dto';
+import { CreateWalletDto, UpdateWalletDto } from './dto/wallet.dto';
 
 @Controller('wallets')
 @UseGuards(JwtAuthGuard)
@@ -19,27 +21,36 @@ export class WalletsController {
   constructor(private readonly walletsService: WalletsService) {}
 
   @Post()
-  create(@Body() createWalletDto: CreateWalletDto) {
-    return this.walletsService.create(createWalletDto);
+  create(@Body() createWalletDto: CreateWalletDto, @CurrentUser() user: User) {
+    return this.walletsService.create(createWalletDto, user);
   }
 
   @Get()
-  findAll() {
-    return this.walletsService.findAll();
+  findAll(@CurrentUser() user: User) {
+    return this.walletsService.findAll(user.idUser);
+  }
+
+  @Get('balance/total')
+  getBalanceTotal(@CurrentUser() user: User) {
+    return this.walletsService.getBalanceTotal(user.idUser);
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.walletsService.findOne(+id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
+    return this.walletsService.findOne(id, user.idUser);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateWalletDto: UpdateWalletDto) {
-    return this.walletsService.update(+id, updateWalletDto);
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateWalletDto: UpdateWalletDto,
+    @CurrentUser() user: User,
+  ) {
+    return this.walletsService.update(id, updateWalletDto, user.idUser);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.walletsService.remove(+id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: User) {
+    return this.walletsService.remove(id, user.idUser);
   }
 }

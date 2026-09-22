@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  UnauthorizedException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '../jwt/jwt.service';
@@ -24,7 +20,11 @@ export class RefreshTokenService {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  async refresh(refreshToken: string): Promise<TokenPair> {
+  async refresh(
+    refreshToken: string,
+    deviceInfo: string,
+    ipAddress: string,
+  ): Promise<TokenPair> {
     const payload = this.jwtService.verifyRefreshToken(refreshToken);
 
     const user = await this.userRepository.findOne({
@@ -39,39 +39,6 @@ export class RefreshTokenService {
     const session = await this.sessionService.validateRefreshToken(
       payload.sessionId,
       refreshToken,
-    );
-
-    if (!session.isActive) {
-      throw new ForbiddenException(AUTH_ERRORS.SESSION_EXPIRED);
-    }
-
-    const sessionId = this.sessionService.generateSessionId();
-
-    const tokens = this.jwtService.generateTokenPair(
-      user.idUser,
-      user.emailUser,
-      user.role.nameRole,
-      sessionId,
-    );
-
-    return tokens;
-  }
-
-  async rotateRefreshToken(
-    oldRefreshToken: string,
-    user: User,
-    deviceInfo: string,
-    ipAddress: string,
-  ): Promise<TokenPair> {
-    const payload = this.jwtService.verifyRefreshToken(oldRefreshToken);
-
-    if (payload.sub !== user.idUser) {
-      throw new UnauthorizedException(AUTH_ERRORS.TOKEN_INVALID);
-    }
-
-    const session = await this.sessionService.validateRefreshToken(
-      payload.sessionId,
-      oldRefreshToken,
     );
 
     await this.sessionService.invalidateSession(session.idSession, user.idUser);
@@ -90,6 +57,7 @@ export class RefreshTokenService {
         idUser: user.idUser,
         deviceInfo,
         ipAddress,
+        idSession: newSessionId,
       },
       tokens.refreshToken,
     );
