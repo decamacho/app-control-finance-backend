@@ -229,14 +229,20 @@ export class PaymentsService {
     if (!dto.paymentDate) return null;
 
     const paymentDate = new Date(dto.paymentDate);
+    const bogotaMidnight = this.toBogotaMidnight(paymentDate);
 
-    if (paymentDate.getTime() > Date.now()) {
+    if (bogotaMidnight.getTime() > Date.now()) {
       throw new BadRequestException(
         'La fecha de pago no puede ser una fecha futura',
       );
     }
 
-    return paymentDate;
+    return bogotaMidnight;
+  }
+
+  private toBogotaMidnight(date: Date): Date {
+    const day = date.toISOString().slice(0, 10);
+    return new Date(`${day}T05:00:00.000Z`);
   }
 
   private toPaymentResponse(payment: Payment) {

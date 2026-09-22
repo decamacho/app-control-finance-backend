@@ -23,7 +23,6 @@ import {
   OrderQueryDto,
   DailySummaryQueryDto,
   RecurringConfigDto,
-  UpdateRecurringDto,
 } from '../dto/food-sales.dto';
 import { PaymentStatus, PaymentMethod } from '../types/payment.enum';
 import { DeliveryStatus } from '../types/delivery-status.enum';
@@ -92,7 +91,10 @@ export class FoodSalesService {
 
     if (dto.isRecurring && dto.recurringConfig) {
       const existingRecurring = await this.recurringOrderRepository.findOne({
-        where: { customer: { idCustomer: customer.idCustomer } },
+        where: {
+          customer: { idCustomer: customer.idCustomer },
+          isActive: true,
+        },
       });
 
       if (existingRecurring) {
@@ -411,7 +413,7 @@ export class FoodSalesService {
 
     const payments = await this.paymentRepository.find({
       where: [
-        { paymentDate: dayRange },
+        { paymentDate: dayRange, order: { statusOrder: OrderStatus.ACTIVE } },
         { paymentDate: IsNull(), createdAt: dayRange },
       ],
       relations: {
@@ -468,7 +470,7 @@ export class FoodSalesService {
 
     const payments = await this.paymentRepository.find({
       where: [
-        { paymentDate: dayRange },
+        { paymentDate: dayRange, order: { statusOrder: OrderStatus.ACTIVE } },
         { paymentDate: IsNull(), createdAt: dayRange },
       ],
       relations: {
@@ -510,6 +512,9 @@ export class FoodSalesService {
       if (orderBusiness !== idBusiness) {
         continue;
       }
+      if (order.statusOrder === OrderStatus.CANCELLED) {
+        continue;
+      }
 
       if (payment.paymentMethod === PaymentMethod.CASH) {
         cash += Number(payment.amount);
@@ -531,7 +536,7 @@ export class FoodSalesService {
 
     return {
       received: Math.round(received * 100) / 100,
-      cash: Math.round(cash * 100) / 100,
+      cash: Math.round((cash - expenses) * 100) / 100,
       otherPayment: Math.round(otherPayment * 100) / 100,
       expenses: Math.round(expenses * 100) / 100,
       net: Math.round((received - expenses) * 100) / 100,
